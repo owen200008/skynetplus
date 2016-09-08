@@ -1,0 +1,57 @@
+CC := gcc
+CXX := g++
+PLAT := linux
+
+all : compileskynet
+
+total : compileall
+
+UpdateSubModule : 
+	git submodule update --init
+
+JEMALLOC_PATH := 3rd/jemalloc
+JEMALLOC_STATICLIB := $(JEMALLOC_PATH)/lib/libjemalloc_pic.a
+JEMALLOC_INC := $(JEMALLOC_PATH)/include/jemalloc
+$(JEMALLOC_STATICLIB) : $(JEMALLOC_PATH)/Makefile
+	cd $(JEMALLOC_PATH) && $(MAKE) CC=$(CC)
+$(JEMALLOC_PATH)/Makefile :
+	cd $(JEMALLOC_PATH) && ./autogen.sh --with-jemalloc-prefix=je_ --disable-valgrind
+
+SRCEXTS :=.cpp .c .S
+CFLAGS := -Wall -gstabs+ -DUSE_JEMALLOC -D__LINUX -I$(JEMALLOC_INC)
+CPPFLAGS := -Wall -std=c++11 -gstabs+ -DUSE_JEMALLOC -D__LINUX -I$(JEMALLOC_INC)
+INLIBS := $(JEMALLOC_STATICLIB) -pthread -lrt
+OUTPUT_PATH := ./
+COMPILEOBJDIR := ./obj/
+COMPILESOURCE := coroutineplus.cpp public_threadlock.cpp test_coroutine.cpp libco_coroutine.cpp coctx_swap.S
+COMPILEOBJS := $(foreach x,$(SRCEXTS), $(patsubst %$(x),%.o,$(filter %$(x),$(COMPILESOURCE))))
+COMPILEFULLOBJS := $(addprefix $(COMPILEOBJDIR),$(COMPILEOBJS))
+vpath %.c ./coroutineplus ./public ./skynetplus
+vpath %.cpp ./coroutineplus ./public ./skynetplus
+vpath %.S ./coroutineplus
+vpath %.o ${COMPILEOBJDIR}
+config : 
+	mkdir -p $(COMPILEOBJDIR)
+%.o : %.c
+	$(CC) -c $(CFLAGS) $< -o $(COMPILEOBJDIR)$(notdir $@)
+%.o : %.cpp
+	$(CXX) -c $(CPPFLAGS) $< -o $(COMPILEOBJDIR)$(notdir $@)
+%.o : %.S
+	$(CC) -c $< -o $(COMPILEOBJDIR)$(notdir $@)
+
+$(OUTPUT_PATH)/coroutine : config $(COMPILEOBJS)
+	$(CXX) -o $@ $(COMPILEFULLOBJS) $(INLIBS)
+
+compileall : UpdateSubModule $(JEMALLOC_STATICLIB) $(OUTPUT_PATH)/skynetplus
+compileskynet : $(OUTPUT_PATH)/coroutine
+
+clean :
+	rm $(OUTPUT_PATH)/skynetplus
+
+cleanall: 
+ifneq (,$(wildcard $(JEMALLOC_PATH)/Makefile))
+	cd $(JEMALLOC_PATH) && $(MAKE) clean
+endif
+
+	
+

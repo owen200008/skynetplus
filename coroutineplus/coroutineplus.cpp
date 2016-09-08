@@ -2,6 +2,21 @@
 #include <assert.h>
 #include <string.h>
 
+#ifdef USE_JEMALLOC
+extern "C" {
+#include "jemalloc.h"
+}
+void* s_malloc(size_t size)
+{
+	return je_malloc(size);
+}
+
+void s_free(void* ptr)
+{
+	je_free(ptr);
+}
+
+#else
 void* s_malloc(size_t size)
 {
 	return malloc(size);
@@ -11,6 +26,7 @@ void s_free(void* ptr)
 {
 	free(ptr);
 }
+#endif
 
 template<class T>
 T* NewObject()
@@ -27,6 +43,18 @@ void DeleteObject(T* obj)
 	s_free(obj);
 }
 ///////////////////////////////////////////////////////////////////////////
+void MakeContextFunc(uint32_t low32, uint32_t hi32)
+{
+	uintptr_t ptr = (uintptr_t)low32 | ((uintptr_t)hi32 << 32);
+	CCorutinePlus* pThis = (CCorutinePlus*)ptr;
+	pThis->StartFunc();
+}
+
+void MakeContextFuncLibco(CCorutinePlus* pThis)
+{
+	pThis->StartFuncLibco();
+}
+
 CCorutinePlus::CCorutinePlus()
 {
 	m_state = CoroutineState_Ready;
@@ -61,7 +89,7 @@ void CCorutinePlus::CheckStackSize(int nDefaultStackSize)
 	}
 }
 
-void CCorutinePlus::ReInit(const std::function<void(CCorutinePlus*)>& func)
+void CCorutinePlus::ReInit(coroutine_func func)
 {
 	m_func = func;
 	m_state = CoroutineState_Ready;
@@ -80,20 +108,25 @@ void CCorutinePlus::Yield()
 {
 	SaveStack(m_pRunPool->m_stack + STACK_SIZE);
 	m_state = CoroutineState_Suspend;
+#ifdef USE_UCONTEXT
 	swapcontext(&m_ctx, &m_pRunPool->m_ctxMain);
-}
-
-static void MakeContextFunc(uint32_t low32, uint32_t hi32)
-{
-	uintptr_t ptr = (uintptr_t)low32 | ((uintptr_t)hi32 << 32);
-	CCorutinePlus* pThis = (CCorutinePlus*)ptr;
-	pThis->StartFunc();
+#else
+	coctx_swapcontext(&m_ctx, &m_pRunPool->m_ctxMain);
+#endif
 }
 
 void CCorutinePlus::StartFunc()
 {
 	m_func(this);
 	m_state = CoroutineState_Dead;
+}
+void CCorutinePlus::StartFuncLibco()
+{
+	StartFunc();
+	//exit no need to save stack
+#ifndef USE_UCONTEXT
+	coctx_swapcontext(&m_ctx, &m_pRunPool->m_ctxMain);
+#endif
 }
 
 void CCorutinePlus::Resume(CCorutinePlusPool* pPool)
@@ -103,6 +136,7 @@ void CCorutinePlus::Resume(CCorutinePlusPool* pPool)
 	{
 	case CoroutineState_Ready:
 		{
+#ifdef USE_UCONTEXT
 			getcontext(&m_ctx);
 			m_ctx.uc_stack.ss_sp = pPool->m_stack;
 			m_ctx.uc_stack.ss_size = STACK_SIZE;
@@ -111,6 +145,13 @@ void CCorutinePlus::Resume(CCorutinePlusPool* pPool)
 			uintptr_t ptr = (uintptr_t)this;
 			makecontext(&m_ctx, (void (*)(void))MakeContextFunc, 2, (uint32_t)ptr, (uint32_t)(ptr>>32));
 			swapcontext(&pPool->m_ctxMain, &m_ctx);
+#else
+			m_ctx.ss_sp = pPool->m_stack;
+			m_ctx.ss_size = STACK_SIZE;
+			m_state = CoroutineState_Running;
+			coctx_make(&m_ctx, (coctx_pfn_t)MakeContextFuncLibco, this);
+			coctx_swapcontext(&pPool->m_ctxMain, &m_ctx);
+#endif
 			if(m_state == CoroutineState_Dead)
 			{
 				pPool->ReleaseCorutine(this);
@@ -119,12 +160,22 @@ void CCorutinePlus::Resume(CCorutinePlusPool* pPool)
 		break;
 	case CoroutineState_Suspend:
 		{
+#ifdef USE_UCONTEXT
 			m_ctx.uc_stack.ss_sp = pPool->m_stack;
 			m_ctx.uc_stack.ss_size = STACK_SIZE;
 			m_ctx.uc_link = &pPool->m_ctxMain;
-
+			
+			memcpy(pPool->m_stack + STACK_SIZE - m_nSize, m_stack, m_nSize);
 			m_state = CoroutineState_Running;
 			swapcontext(&pPool->m_ctxMain, &m_ctx);
+#else
+			m_ctx.ss_sp = pPool->m_stack;
+			m_ctx.ss_size = STACK_SIZE;
+
+			memcpy(pPool->m_stack + STACK_SIZE - m_nSize, m_stack,m_nSize);
+			m_state = CoroutineState_Running;
+			coctx_swapcontext(&pPool->m_ctxMain, &m_ctx);
+#endif
 			if(m_state == CoroutineState_Dead)
 			{
 				 pPool->ReleaseCorutine(this);
@@ -146,6 +197,9 @@ void CCorutinePlus::Resume(CCorutinePlusPool* pPool)
 ///////////////////////////////////////////////////////////////////////////
 CCorutinePlusPool::CCorutinePlusPool()
 {
+#ifndef USE_UCONTEXT
+	coctx_init(&m_ctxMain);
+#endif
 }
 
 CCorutinePlusPool::~CCorutinePlusPool()

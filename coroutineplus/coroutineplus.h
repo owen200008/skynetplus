@@ -10,6 +10,7 @@
 #else
 	#include <ucontext.h>
 #endif
+#include "libco_coroutine.h"
 
 enum CoroutineState
 {
@@ -22,16 +23,17 @@ enum CoroutineState
 #define STACK_SIZE 			(1024*1024)
 #define DEFAULT_COROUTINE 	16
 #define RESUME_MAXPARAM		4
-
+class CCorutinePlus;
 class CCorutinePlusPool;
+typedef void (*coroutine_func)(CCorutinePlus* pCorutinePlus);
 class CCorutinePlus
 {
 public:
 	CCorutinePlus();
-	~CCorutinePlus();
+	virtual ~CCorutinePlus();
 	
 	void CheckStackSize(int nDefaultStackSize);
-	void ReInit(const std::function<void(CCorutinePlus*)>& func);
+	void ReInit(coroutine_func func);
 	void Yield();
 	template<class T>
 	T GetResumeParam(int nParam)
@@ -81,15 +83,21 @@ public:
 		m_pResumeParam[3] = &param4;
 		Resume(pPool);
 	}
+	CCorutinePlusPool* GetRunPool(){return m_pRunPool;}
 
 	//no call self
 	void StartFunc();
+	void StartFuncLibco();
 protected:
 	void SaveStack(char* pTop);
 protected:
 	CoroutineState							m_state;
-	std::function<void(CCorutinePlus*)> 	m_func;
+	coroutine_func 							m_func;
+#ifdef USE_UCONTEXT
 	ucontext_t 								m_ctx;
+#else
+	coctx_t									m_ctx;
+#endif
 	char*									m_stack;
 	int										m_nCap;
 	int										m_nSize;
@@ -104,7 +112,7 @@ class CCorutinePlusPool
 {
 public:
 	CCorutinePlusPool();
-	~CCorutinePlusPool();
+	virtual ~CCorutinePlusPool();
 
 	bool InitCorutine(int nDefaultSize = DEFAULT_COROUTINE, int nDefaultStackSize = 1024 * 16);
 	
@@ -116,7 +124,11 @@ public:
 protected:
 	CCorutinePlus* CreateCorutine(bool bPush);
 protected:
+#ifdef USE_UCONTEXT
 	ucontext_t              			m_ctxMain;
+#else
+	coctx_t								m_ctxMain;
+#endif
 	char 								m_stack[STACK_SIZE];
 	std::vector<CCorutinePlus*>			m_vtCorutinePlus;
 	unsigned short						m_usCreateTimes;
