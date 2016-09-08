@@ -23,6 +23,13 @@ LUA_INC := $(LUA_PATH)
 $(LUA_STATICLIB) :
 	cd $(LUA_PATH) && $(MAKE) CC='$(CC) -std=gnu99' $(PLAT)
 
+CCBASIC_PATH := 3rd/ccbasic
+CCBASIC_STATICLIB := $(CCBASIC_PATH)/lib/basiclib.a
+CCBASIC_INC := $(CCBASIC_PATH)/src/inc
+$(CCBASIC_STATICLIB) : 
+	cd $(CCBASIC_PATH)/lib/linux && $(MAKE)
+	
+
 JEMALLOC_PATH := 3rd/jemalloc
 JEMALLOC_STATICLIB := $(JEMALLOC_PATH)/lib/libjemalloc_pic.a
 JEMALLOC_INC := $(JEMALLOC_PATH)/include/jemalloc
@@ -37,7 +44,7 @@ CPPFLAGS := $(RELEASEFLAG) -Wall -std=c++11 -DUSE_3RRD_MALLOC -D__LINUX -I$(JEMA
 INLIBS := $(JEMALLOC_STATICLIB) $(LUA_STATICLIB) -pthread -lrt -ldl
 OUTPUT_PATH := ./
 COMPILEOBJDIR := ./obj/
-COMPILESOURCE := coctx_swap.S libco_coroutine.cpp coroutineplus.cpp public_threadlock.cpp malloc_hook.cpp malloc_3rd.cpp skynetplus_servermodule.cpp skynetplusmain.cpp
+COMPILESOURCE := coctx_swap.S libco_coroutine.cpp coroutineplus.cpp malloc_hook.cpp malloc_3rd.cpp skynetplus_servermodule.cpp skynetplusmain.cpp
 COMPILEOBJS := $(foreach x,$(SRCEXTS), $(patsubst %$(x),%.o,$(filter %$(x),$(COMPILESOURCE))))
 COMPILEFULLOBJS := $(addprefix $(COMPILEOBJDIR),$(COMPILEOBJS))
 vpath %.c ./coroutineplus ./public ./skynetplus
@@ -56,7 +63,7 @@ config :
 $(OUTPUT_PATH)/skynetpp : config $(COMPILEOBJS)
 	$(CXX) -o $@ $(COMPILEFULLOBJS) $(INLIBS)
 
-compileall : UpdateSubModule $(JEMALLOC_STATICLIB) $(LUA_STATICLIB) $(OUTPUT_PATH)/skynetplus
+compileall : UpdateSubModule $(JEMALLOC_STATICLIB) $(LUA_STATICLIB) $(CCBASIC_STATICLIB)  $(OUTPUT_PATH)/skynetpp
 compileskynet : $(OUTPUT_PATH)/skynetpp
 
 clean :

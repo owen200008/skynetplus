@@ -23,21 +23,15 @@ void coctx_init(coctx_t *ctx)
 #if defined(__i386__)
 void coctx_make(coctx_t *ctx,coctx_pfn_t pfn, const void* s1)
 {
-	char *sp = ctx->ss_sp + ctx->ss_size;
+	int *sp = (int*)((uintptr_t)ctx->ss_sp + ctx->ss_size);
+	sp -= 1;
 	sp = (char*)((unsigned long)sp & -16L);
+	memset(sp - 64, 0, 64);
+	sp[0] = s1;
+	sp -= 1;
+	sp[0] = 0;
 
-	int len = sizeof(coctx_param_t) + 64;
-	memset( sp - len,0,len );
-	ctx->routine = pfn;
-	ctx->s1 = s1;
-	ctx->s2 = s2;
-
-	ctx->param = (coctx_param_t*)sp ;
-	ctx->param->f = pfn;
-	ctx->param->f_link = 0;
-	ctx->param->s1 = s1;
-
-	ctx->regs[ ESP ] = (char*)(ctx->param) + sizeof(void*);
+	ctx->regs[ ESP ] = (char*)sp;
 	ctx->regs[ EIP ] = (char*)pfn;
 }
 #elif defined(__x86_64__)
@@ -48,11 +42,13 @@ void coctx_make(coctx_t *ctx, coctx_pfn_t pfn, const void *s1)
 	long long int *sp = (long long int*)((uintptr_t)stack + ctx->ss_size);
 	sp -= 1;
 	sp = (long long int*)((((uintptr_t)sp) & - 16L ) - 8);
+	memset(sp - 128, 0 , 128);
 
 	ctx->regs[ RBX ] = &sp[1];
 	ctx->regs[ RSP ] = (char*)sp;
 	ctx->regs[ RIP ] = (char*)pfn;
 	
+	sp[0] = 0;
 	sp[1] = 0;
 	
 	ctx->regs[ RDI ] = (char*)s1;
