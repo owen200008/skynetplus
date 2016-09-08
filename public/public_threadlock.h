@@ -1,5 +1,8 @@
-#ifndef INC_THREADLOCK_H
-#define INC_THREADLOCK_H
+#ifndef INC_PUBLIC_THREADLOCK_H
+#define INC_PUBLIC_THREADLOCK_H
+
+#include <stdlib.h>
+#include <stdint.h>
 
 struct SpinLock
 {
@@ -17,6 +20,7 @@ public:
 	virtual ~CSpinLockFunc();
 
 	void Lock();
+	void LockAndSleep(unsigned short usSleep = 100);
 	void UnLock();
 protected:
 	SpinLock* 	m_pLock;

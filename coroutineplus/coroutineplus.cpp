@@ -1,37 +1,21 @@
 #include "coroutineplus.h"
+#include <stdio.h>
 #include <assert.h>
 #include <string.h>
+#include <stdint.h>
 
-#ifdef USE_JEMALLOC
-extern "C" {
-#include "jemalloc.h"
-}
-void* s_malloc(size_t size)
-{
-	return je_malloc(size);
-}
-
-void s_free(void* ptr)
-{
-	je_free(ptr);
-}
-
+#ifdef USE_3RRD_MALLOC
+extern void* s_3rd_malloc(size_t size);
+extern void s_3rd_free(void* ptr);
 #else
-void* s_malloc(size_t size)
-{
-	return malloc(size);
-}
-
-void s_free(void* ptr)
-{
-	free(ptr);
-}
+#define s_3rd_malloc malloc
+#define s_3rd_free free
 #endif
 
 template<class T>
 T* NewObject()
 {
-	void* p = s_malloc(sizeof(T));
+	void* p = s_3rd_malloc(sizeof(T));
 	::new (p)T;
 	return (T*)p;
 }
@@ -40,7 +24,7 @@ template<class T>
 void DeleteObject(T* obj)
 {
 	obj->~T();
-	s_free(obj);
+	s_3rd_free(obj);
 }
 ///////////////////////////////////////////////////////////////////////////
 void MakeContextFunc(uint32_t low32, uint32_t hi32)
@@ -69,7 +53,7 @@ CCorutinePlus::~CCorutinePlus()
 {
 	if(m_stack)
 	{
-		s_free(m_stack);
+		s_3rd_free(m_stack);
 		m_nSize = 0;
 		m_nCap = 0;
 		m_stack = nullptr;
@@ -82,10 +66,10 @@ void CCorutinePlus::CheckStackSize(int nDefaultStackSize)
 	{
 		if(m_stack)
 		{
-			s_free(m_stack);
+			s_3rd_free(m_stack);
 		}
 		m_nCap = nDefaultStackSize;
-		m_stack = (char*)s_malloc(m_nCap);
+		m_stack = (char*)s_3rd_malloc(m_nCap);
 	}
 }
 
@@ -95,18 +79,15 @@ void CCorutinePlus::ReInit(coroutine_func func)
 	m_state = CoroutineState_Ready;
 }
 
-void CCorutinePlus::SaveStack(char* pTop)
+void CCorutinePlus::Yield()
 {
+	char* pTop = m_pRunPool->m_stack + STACK_SIZE;
 	char dummy = 0;
 	int nLength = pTop - &dummy;
 	CheckStackSize(nLength);
 	m_nSize = nLength;
 	memcpy(m_stack, &dummy, m_nSize);
-}
 
-void CCorutinePlus::Yield()
-{
-	SaveStack(m_pRunPool->m_stack + STACK_SIZE);
 	m_state = CoroutineState_Suspend;
 #ifdef USE_UCONTEXT
 	swapcontext(&m_ctx, &m_pRunPool->m_ctxMain);
@@ -127,6 +108,7 @@ void CCorutinePlus::StartFuncLibco()
 #ifndef USE_UCONTEXT
 	coctx_swapcontext(&m_ctx, &m_pRunPool->m_ctxMain);
 #endif
+	printf("error, much resume...\n");
 }
 
 void CCorutinePlus::Resume(CCorutinePlusPool* pPool)

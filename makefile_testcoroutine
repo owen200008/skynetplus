@@ -2,6 +2,13 @@ CC := gcc
 CXX := g++
 PLAT := linux
 
+release := 0
+ifeq ($(release),1)
+RELEASEFLAG := -O2
+else
+RELEASEFLAG := -gstabs+
+endif
+
 all : compileskynet
 
 total : compileall
@@ -18,8 +25,8 @@ $(JEMALLOC_PATH)/Makefile :
 	cd $(JEMALLOC_PATH) && ./autogen.sh --with-jemalloc-prefix=je_ --disable-valgrind
 
 SRCEXTS :=.cpp .c .S
-CFLAGS := -Wall -gstabs+ -DUSE_JEMALLOC -D__LINUX -I$(JEMALLOC_INC)
-CPPFLAGS := -Wall -std=c++11 -gstabs+ -DUSE_JEMALLOC -D__LINUX -I$(JEMALLOC_INC)
+CFLAGS := $(RELEASEFLAG) -Wall -DUSE_3RRD_MALLOC -D__LINUX -I$(JEMALLOC_INC)
+CPPFLAGS := $(RELEASEFLAG) -Wall -std=c++11 -DUSE_3RRD_MALLOC -D__LINUX -I$(JEMALLOC_INC)
 INLIBS := $(JEMALLOC_STATICLIB) -pthread -lrt
 OUTPUT_PATH := ./
 COMPILEOBJDIR := ./obj/
@@ -46,6 +53,7 @@ compileall : UpdateSubModule $(JEMALLOC_STATICLIB) $(OUTPUT_PATH)/skynetplus
 compileskynet : $(OUTPUT_PATH)/coroutine
 
 clean :
+	rm -rf obj
 	rm $(OUTPUT_PATH)/skynetplus
 
 cleanall: 

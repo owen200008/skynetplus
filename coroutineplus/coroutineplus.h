@@ -3,7 +3,6 @@
 
 #include <stdlib.h>
 #include <vector>
-#include <functional>
 
 #if defined(__MAC)
 	#include <sys/ucontext.h>
@@ -88,8 +87,6 @@ public:
 	//no call self
 	void StartFunc();
 	void StartFuncLibco();
-protected:
-	void SaveStack(char* pTop);
 protected:
 	CoroutineState							m_state;
 	coroutine_func 							m_func;

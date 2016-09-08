@@ -2,6 +2,13 @@ CC := gcc
 CXX := g++
 PLAT := linux
 
+release := 0
+ifeq ($(release),1)
+RELEASEFLAG := -O2
+else
+RELEASEFLAG := -gstabs+
+endif
+
 all : compileskynet
 
 total : compileall
@@ -25,12 +32,12 @@ $(JEMALLOC_PATH)/Makefile :
 	cd $(JEMALLOC_PATH) && ./autogen.sh --with-jemalloc-prefix=je_ --disable-valgrind
 
 SRCEXTS :=.cpp .c .S
-CFLAGS := -Wall -gstabs+ -DUSE_JEMALLOC -D__LINUX -I$(JEMALLOC_INC) -I$(LUA_INC)
-CPPFLAGS := -Wall -std=c++11 -gstabs+ -DUSE_JEMALLOC -D__LINUX -I$(JEMALLOC_INC) -I$(LUA_INC)
-INLIBS := $(JEMALLOC_STATICLIB) $(LUA_STATICLIB) -pthread -lrt
+CFLAGS := $(RELEASEFLAG) -Wall -DUSE_3RRD_MALLOC -D__LINUX -I$(JEMALLOC_INC) -I$(LUA_INC)
+CPPFLAGS := $(RELEASEFLAG) -Wall -std=c++11 -DUSE_3RRD_MALLOC -D__LINUX -I$(JEMALLOC_INC) -I$(LUA_INC)
+INLIBS := $(JEMALLOC_STATICLIB) $(LUA_STATICLIB) -pthread -lrt -ldl
 OUTPUT_PATH := ./
 COMPILEOBJDIR := ./obj/
-COMPILESOURCE := coroutineplus.cpp public_threadlock.cpp main.cpp libco_coroutine.cpp coctx_swap.S
+COMPILESOURCE := coctx_swap.S libco_coroutine.cpp coroutineplus.cpp public_threadlock.cpp malloc_hook.cpp malloc_3rd.cpp skynetplus_servermodule.cpp skynetplusmain.cpp
 COMPILEOBJS := $(foreach x,$(SRCEXTS), $(patsubst %$(x),%.o,$(filter %$(x),$(COMPILESOURCE))))
 COMPILEFULLOBJS := $(addprefix $(COMPILEOBJDIR),$(COMPILEOBJS))
 vpath %.c ./coroutineplus ./public ./skynetplus
@@ -53,6 +60,7 @@ compileall : UpdateSubModule $(JEMALLOC_STATICLIB) $(LUA_STATICLIB) $(OUTPUT_PAT
 compileskynet : $(OUTPUT_PATH)/skynetpp
 
 clean :
+	rm -rf obj
 	rm $(OUTPUT_PATH)/skynetpp
 
 cleanall: 

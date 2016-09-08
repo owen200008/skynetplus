@@ -4,3 +4,6 @@
 [submodule "3rd/jemalloc"]
 	path = 3rd/jemalloc
 	url = https://github.com/jemalloc/jemalloc.git
+[submodule "3rd/ccbasic"]
+	path = 3rd/ccbasic
+	url = https://github.com/owen200008/ccbasic.git
