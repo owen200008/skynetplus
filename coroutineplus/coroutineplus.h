@@ -1,14 +1,6 @@
 #ifndef INC_COROUTINEPLUS_H
 #define INC_COROUTINEPLUS_H
 
-#include <stdlib.h>
-#include <vector>
-
-#if defined(__MAC)
-	#include <sys/ucontext.h>
-#else
-	#include <ucontext.h>
-#endif
 #include "libco_coroutine.h"
 
 enum CoroutineState
@@ -25,7 +17,7 @@ enum CoroutineState
 class CCorutinePlus;
 class CCorutinePlusPool;
 typedef void (*coroutine_func)(CCorutinePlus* pCorutinePlus);
-class CCorutinePlus
+class CCorutinePlus : public basiclib::CBasicObject
 {
 public:
 	CCorutinePlus();
@@ -105,7 +97,7 @@ protected:
 };
 
 //thread not safe
-class CCorutinePlusPool
+class CCorutinePlusPool : public basiclib::CBasicObject
 {
 public:
 	CCorutinePlusPool();
@@ -127,7 +119,8 @@ protected:
 	coctx_t								m_ctxMain;
 #endif
 	char 								m_stack[STACK_SIZE];
-	std::vector<CCorutinePlus*>			m_vtCorutinePlus;
+	typedef basiclib::basic_vector<CCorutinePlus*>::type	VTCorutinePlus;
+	VTCorutinePlus						m_vtCorutinePlus;
 	unsigned short						m_usCreateTimes;
 	int									m_nDefaultStackSize;
 

@@ -1,31 +1,10 @@
+#include <basic.h>
 #include "coroutineplus.h"
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>
 #include <stdint.h>
 
-#ifdef USE_3RRD_MALLOC
-extern void* s_3rd_malloc(size_t size);
-extern void s_3rd_free(void* ptr);
-#else
-#define s_3rd_malloc malloc
-#define s_3rd_free free
-#endif
-
-template<class T>
-T* NewObject()
-{
-	void* p = s_3rd_malloc(sizeof(T));
-	::new (p)T;
-	return (T*)p;
-}
-
-template<class T>
-void DeleteObject(T* obj)
-{
-	obj->~T();
-	s_3rd_free(obj);
-}
 ///////////////////////////////////////////////////////////////////////////
 void MakeContextFunc(uint32_t low32, uint32_t hi32)
 {
@@ -53,7 +32,7 @@ CCorutinePlus::~CCorutinePlus()
 {
 	if(m_stack)
 	{
-		s_3rd_free(m_stack);
+		basiclib::BasicDeallocate(m_stack);
 		m_nSize = 0;
 		m_nCap = 0;
 		m_stack = nullptr;
@@ -66,10 +45,10 @@ void CCorutinePlus::CheckStackSize(int nDefaultStackSize)
 	{
 		if(m_stack)
 		{
-			s_3rd_free(m_stack);
+			basiclib::BasicDeallocate(m_stack);
 		}
 		m_nCap = nDefaultStackSize;
-		m_stack = (char*)s_3rd_malloc(m_nCap);
+		m_stack = (char*)basiclib::BasicAllocate(m_nCap);
 	}
 }
 
@@ -186,6 +165,11 @@ CCorutinePlusPool::CCorutinePlusPool()
 
 CCorutinePlusPool::~CCorutinePlusPool()
 {
+	for(auto& c : m_vtCorutinePlus)
+	{
+		delete c;
+	}
+	m_vtCorutinePlus.clear();
 }
 
 bool CCorutinePlusPool::InitCorutine(int nDefaultSize, int nDefaultStackSize)
@@ -222,7 +206,7 @@ void CCorutinePlusPool::ReleaseCorutine(CCorutinePlus* pPTR)
 
 CCorutinePlus* CCorutinePlusPool::CreateCorutine(bool bPush)
 {
-	CCorutinePlus* pRet = NewObject<CCorutinePlus>();	
+	CCorutinePlus* pRet = new CCorutinePlus();	
 	pRet->CheckStackSize(m_nDefaultStackSize);
 	m_usCreateTimes++;
 	if(bPush)

@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <basic.h>
 #include "skynetplus/skynetplus_servermodule.h"
 extern "C" {
 #include <lua.h>
@@ -21,7 +22,7 @@ static void _init_env(lua_State *L)
 	while (lua_next(L, -2) != 0) {
 		int keyt = lua_type(L, -2);
 		if (keyt != LUA_TSTRING) {
-			SystemLogError("Invalid config table\n");
+			basiclib::BasicLogEventError("Invalid config table");
 			exit(1);
 		}
 		const char * key = lua_tostring(L,-2);
@@ -31,7 +32,7 @@ static void _init_env(lua_State *L)
 		} else {
 			const char * value = lua_tostring(L,-1);
 			if (value == NULL) {
-				SystemLogError("Invalid config table key = %s\n", key);
+				basiclib::BasicLogEventErrorV("Invalid config table key = %s", key);
 				exit(1);
 			}
 			CSkynetPlus_ServerModule::GetServerModule().SetEnv(key, value);
@@ -55,16 +56,19 @@ static const char * load_config = "\
 
 int main(int argc, char* argv[])
 {
-	const char * config_file = NULL ;
-	if (argc > 1) 
+	if(argc <= 1)
 	{
-		config_file = argv[1];
-	}
-	else
-	{
-		SystemLogError("need a config\n");
+		printf("ParamError, Need Config\n");
 		return 1;
 	}
+	const char * config_file = argv[1] ;
+	//default log
+	basiclib::CBasicString strDefaultLogFileName = basiclib::BasicGetModulePath() + "/log/" + config_file + ".log";
+	basiclib::CBasicString strDefaultErrorFileName = basiclib::BasicGetModulePath() + "/log/" + config_file + ".error";
+
+	basiclib::BasicSetDefaultLogEventMode(LOG_ADD_TIME|LOG_ADD_THREAD, strDefaultLogFileName.c_str());
+	basiclib::BasicSetDefaultLogEventErrorMode(LOG_ADD_TIME|LOG_ADD_THREAD, strDefaultErrorFileName.c_str());
+
 	luaS_initshr();
 	CSkynetPlus_ServerModule& serverModule = CSkynetPlus_ServerModule::GetServerModule();
 	serverModule.Init();
@@ -78,18 +82,14 @@ int main(int argc, char* argv[])
 	err = lua_pcall(L, 1, 1, 0);
 	if (err) 
 	{
-		SystemLogError("%s\n", lua_tostring(L,-1));
+		basiclib::BasicLogEventErrorV("%s", lua_tostring(L,-1));
 		lua_close(L);
 		return 1;
 	}
 	_init_env(L);
-	
-	serverModule.ReadConfig();
-
 	lua_close(L);
 	
-	serverModule.Start();
-
+	serverModule.Start(config_file);
 	return 0;
 }
 

@@ -28,23 +28,14 @@ CCBASIC_STATICLIB := $(CCBASIC_PATH)/lib/basiclib.a
 CCBASIC_INC := $(CCBASIC_PATH)/src/inc
 $(CCBASIC_STATICLIB) : 
 	cd $(CCBASIC_PATH)/lib/linux && $(MAKE)
-	
-
-JEMALLOC_PATH := 3rd/jemalloc
-JEMALLOC_STATICLIB := $(JEMALLOC_PATH)/lib/libjemalloc_pic.a
-JEMALLOC_INC := $(JEMALLOC_PATH)/include/jemalloc
-$(JEMALLOC_STATICLIB) : $(JEMALLOC_PATH)/Makefile
-	cd $(JEMALLOC_PATH) && $(MAKE) CC=$(CC)
-$(JEMALLOC_PATH)/Makefile :
-	cd $(JEMALLOC_PATH) && ./autogen.sh --with-jemalloc-prefix=je_ --disable-valgrind
 
 SRCEXTS :=.cpp .c .S
-CFLAGS := $(RELEASEFLAG) -Wall -DUSE_3RRD_MALLOC -D__LINUX -I$(JEMALLOC_INC) -I$(LUA_INC)
-CPPFLAGS := $(RELEASEFLAG) -Wall -std=c++11 -DUSE_3RRD_MALLOC -D__LINUX -I$(JEMALLOC_INC) -I$(LUA_INC)
-INLIBS := $(JEMALLOC_STATICLIB) $(LUA_STATICLIB) -pthread -lrt -ldl
+CFLAGS := $(RELEASEFLAG) -Wall -D__LINUX -I$(LUA_INC) -I$(CCBASIC_INC)
+CPPFLAGS := $(RELEASEFLAG) -Wall -std=c++11 -D__LINUX -I$(LUA_INC) -I$(CCBASIC_INC)
+INLIBS := $(LUA_STATICLIB) $(CCBASIC_STATICLIB) -pthread -lrt -ldl $(CCBASIC_PATH)/3rd/jemalloc/lib/libjemalloc_pic.a
 OUTPUT_PATH := ./
 COMPILEOBJDIR := ./obj/
-COMPILESOURCE := coctx_swap.S libco_coroutine.cpp coroutineplus.cpp malloc_hook.cpp malloc_3rd.cpp skynetplus_servermodule.cpp skynetplusmain.cpp
+COMPILESOURCE := coctx_swap.S libco_coroutine.cpp coroutineplus.cpp skynetplus_servermodule.cpp skynetplus_context.cpp skynetplus_handle.cpp skynetplus_module.cpp skynetplus_monitor.cpp skynetplus_mq.cpp skynetplus_timer.cpp skynetplusmain.cpp
 COMPILEOBJS := $(foreach x,$(SRCEXTS), $(patsubst %$(x),%.o,$(filter %$(x),$(COMPILESOURCE))))
 COMPILEFULLOBJS := $(addprefix $(COMPILEOBJDIR),$(COMPILEOBJS))
 vpath %.c ./coroutineplus ./public ./skynetplus
@@ -63,7 +54,7 @@ config :
 $(OUTPUT_PATH)/skynetpp : config $(COMPILEOBJS)
 	$(CXX) -o $@ $(COMPILEFULLOBJS) $(INLIBS)
 
-compileall : UpdateSubModule $(JEMALLOC_STATICLIB) $(LUA_STATICLIB) $(CCBASIC_STATICLIB)  $(OUTPUT_PATH)/skynetpp
+compileall : UpdateSubModule $(LUA_STATICLIB) $(CCBASIC_STATICLIB)  $(OUTPUT_PATH)/skynetpp
 compileskynet : $(OUTPUT_PATH)/skynetpp
 
 clean :
@@ -71,9 +62,6 @@ clean :
 	rm $(OUTPUT_PATH)/skynetpp
 
 cleanall: 
-ifneq (,$(wildcard $(JEMALLOC_PATH)/Makefile))
-	cd $(JEMALLOC_PATH) && $(MAKE) clean
-endif
 	cd $(LUA_PATH) && $(MAKE) clean
 	rm -f $(LUA_STATICLIB)
 
