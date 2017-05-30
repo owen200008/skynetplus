@@ -3,3 +3,7 @@
 ################################################################################
 
 /bin/Debug
+/build
+/dll/kernel/backup
+/skynetplusexe.dir/Debug
+/Win32/Debug/ZERO_CHECK
