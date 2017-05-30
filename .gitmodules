@@ -4,3 +4,9 @@
 [submodule "3rd/ccbasic"]
 	path = 3rd/ccbasic
 	url = https://github.com/owen200008/ccbasic.git
+[submodule "3rd/rapidjson"]
+	path = 3rd/rapidjson
+	url = https://github.com/miloyip/rapidjson.git
+[submodule "3rd/hiredis"]
+	path = 3rd/hiredis
+	url = https://github.com/redis/hiredis.git
