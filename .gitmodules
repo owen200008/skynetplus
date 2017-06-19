@@ -2,3 +2,6 @@
 	path = 3rd/skynet
 	url = https://github.com/cloudwu/skynet.git
 
+[submodule "3rd/ccbasic"]
+	path = 3rd/ccbasic
+	url = https://github.com/owen200008/ccbasic.git
