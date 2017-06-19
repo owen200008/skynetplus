@@ -30,7 +30,7 @@ public:
     virtual void ReleaseCtx();
 
     //! 协程里面调用Bussiness消息
-    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg);
+    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg);
 
     //! 判断是否连接，如果没有连接发起连接
     void CheckConnect();
@@ -40,18 +40,18 @@ public:
     bool IsTransmit();
     ////////////////////////////////////////////////////////////////////////////////////////
     //业务类, 全部使用静态函数, 这样可以保证动态库函数可以替换,做到动态更新
-    static void OnTimer(CCoroutineCtx* pCtx, CCtx_CorutinePlusThreadData* pData);
+    static void OnTimer(CCoroutineCtx* pCtx);
 protected:
     ////////////////////DispathBussinessMsg
     //! 发送请求
-    long DispathBussinessMsg_0_Exec(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, int nParam, void** pParam, void* pRetPacket);
-    long ExecReply(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, MysqlReplyExec* pRetPacket);
+    long DispathBussinessMsg_0_Exec(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket);
+    long ExecReply(CCorutinePlus* pCorutine, MysqlReplyExec* pRetPacket);
 
-    long DispathBussinessMsg_1_Query(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, int nParam, void** pParam, void* pRetPacket);
-    long QueryReply(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, MysqlReplyQuery* pRetPacket);
+    long DispathBussinessMsg_1_Query(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket);
+    long QueryReply(CCorutinePlus* pCorutine, MysqlReplyQuery* pRetPacket);
 
-    long DispathBussinessMsg_2_Ping(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, int nParam, void** pParam, void* pRetPacket);
-    long DispathBussinessMsg_3_Multi(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, int nParam, void** pParam, void* pRetPacket);
+    long DispathBussinessMsg_2_Ping(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket);
+    long DispathBussinessMsg_3_Multi(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket);
     //发送执行sql
     void SendRequestQuery(const char* pSQL);
     void SendRequestPing();
@@ -70,12 +70,12 @@ protected:
     //! 创建协程
     static void Corutine_OnReceiveData(CCorutinePlus* pCorutine);
 protected:
-    static void Func_ReceiveMysqlConnect(CCoroutineCtx* pCtx, ctx_message* pMsg, CCtx_CorutinePlusThreadData* pData);
-    static void Func_ReceiveMysqlDisconnect(CCoroutineCtx* pCtx, ctx_message* pMsg, CCtx_CorutinePlusThreadData* pData);
-    static void Func_ReceiveMysqlIdle(CCoroutineCtx* pCtx, ctx_message* pMsg, CCtx_CorutinePlusThreadData* pData);
+    static void Func_ReceiveMysqlConnect(CCoroutineCtx* pCtx, ctx_message* pMsg);
+    static void Func_ReceiveMysqlDisconnect(CCoroutineCtx* pCtx, ctx_message* pMsg);
+    static void Func_ReceiveMysqlIdle(CCoroutineCtx* pCtx, ctx_message* pMsg);
 protected:
-    void ReceiveMysqlConnect(ctx_message* pMsg, CCtx_CorutinePlusThreadData* pData);
-    void ReceiveMysqlDisconnect(ctx_message* pMsg, CCtx_CorutinePlusThreadData* pData);
+    void ReceiveMysqlConnect(ctx_message* pMsg);
+    void ReceiveMysqlDisconnect(ctx_message* pMsg);
 protected:
     //解析头
     int Parse_PacketHead(unsigned char* pData, int nLength, Net_UChar& cField_count, Net_UChar& packetNO);
@@ -109,7 +109,7 @@ protected:
 //实现全局安全的函数封装类似select和query
 _SKYNET_KERNEL_DLL_API bool CCFrameMysqlExec(uint32_t nResCtxID, uint32_t nMysqlCtxID, CCorutinePlus* pCorutine, const char* pSQL, MysqlReplyExec& replyPacket);
 _SKYNET_KERNEL_DLL_API bool CCFrameMysqlQuery(uint32_t nResCtxID, uint32_t nMysqlCtxID, CCorutinePlus* pCorutine, const char* pSQL, MysqlReplyQuery& replyPacket);
-_SKYNET_KERNEL_DLL_API long CCFrameMysqlMulty(uint32_t nResCtxID, uint32_t nMysqlCtxID, CCorutinePlus* pCorutine, MysqlMultiRequest* pRequest);
+_SKYNET_KERNEL_DLL_API bool CCFrameMysqlMulty(uint32_t nResCtxID, uint32_t nMysqlCtxID, CCorutinePlus* pCorutine, MysqlMultiRequest* pRequest);
 
 #pragma warning (pop)
 

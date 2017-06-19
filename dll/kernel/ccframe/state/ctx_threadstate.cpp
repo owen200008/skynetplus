@@ -30,10 +30,11 @@ void CCtx_ThreadState::ReleaseCtx(){
 }
 
 //业务类, 全部使用静态函数
-void CCtx_ThreadState::OnTimerShowThreadState(CCoroutineCtx* pCtx, CCtx_CorutinePlusThreadData* pData)
+void CCtx_ThreadState::OnTimerShowThreadState(CCoroutineCtx* pCtx)
 {
-    CCFrameSCBasicLogEventV(pData, "ThreadID(%08d): CorutinePool(%d/%d Stack(%d/%d))",
-        pData->GetThreadID(),
-        pData->GetCorutinePlusPool()->GetVTCorutineSize(), pData->GetCorutinePlusPool()->GetCreateCorutineTimes(),
-        pData->GetCorutinePlusPool()->GetVTShareStackCount(), pData->GetCorutinePlusPool()->GetCreateTimesShareStackCount());
+	CCorutinePlusThreadData* pCurrentData = CCtx_ThreadPool::GetThreadPool()->GetOrCreateSelfThreadData();
+    CCFrameSCBasicLogEventV("ThreadID(%08d): CorutinePool(%d/%d Stack(%d/%d))",
+		pCurrentData->GetThreadID(),
+		pCurrentData->GetCorutinePlusPool()->GetVTCorutineSize(), pCurrentData->GetCorutinePlusPool()->GetCreateCorutineTimes(),
+		pCurrentData->GetCorutinePlusPool()->GetVTShareStackCount(), pCurrentData->GetCorutinePlusPool()->GetCreateTimesShareStackCount());
 }

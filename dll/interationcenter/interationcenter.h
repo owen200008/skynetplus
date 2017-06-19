@@ -38,7 +38,7 @@ public:
 	virtual int InitCtx(CMQMgr* pMQMgr, const std::function<const char*(InitGetParamType, const char* pKey, const char* pDefault)>& func);
 
     //! 协程里面调用Bussiness消息
-    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg);
+    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg);
 
     //! 共享网络层
     CCFrameServer_Frame& GetServer(){ return m_server; }
@@ -47,10 +47,10 @@ public:
     //! 启动的时候注册
     void RegisterSerializeAndUnSerialize(uint32_t nDstCtxID, uint32_t nType, ServerCommuSerialize& func);
 protected:
-    long DispathBussinessMsg_Packet(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, int nParam, void** pParam, void* pRetPacket);
-    long DispathBussinessMsg_GetByID(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, int nParam, void** pParam, void* pRetPacket);
-    long DispathBussinessMsg_SelfCtxRegister(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, int nParam, void** pParam, void* pRetPacket);
-    long DispathBussinessMsg_SelfCtxDelete(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, int nParam, void** pParam, void* pRetPacket);
+    long DispathBussinessMsg_Packet(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket);
+    long DispathBussinessMsg_GetByID(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket);
+    long DispathBussinessMsg_SelfCtxRegister(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket);
+    long DispathBussinessMsg_SelfCtxDelete(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket);
 protected:
     virtual int32_t OnReceive(basiclib::CBasicSessionNetClient* pNotify, Net_UInt dwNetCode, Net_Int cbData, const char* pszData);
     virtual int32_t OnDisconnect(basiclib::CBasicSessionNetClient* pNotify, Net_UInt dwNetCode);

@@ -12,6 +12,7 @@
 #include "ctx_handle.h"
 #include "dllmodule.h"
 #include "log/ctx_log.h"
+#include "../scbasic/encode/rsaencode.h"
 
 #pragma warning (push)
 #pragma warning (disable: 4251)
@@ -42,9 +43,10 @@ typedef fastdelegate::FastDelegate0<void*> OnCreateUDData;
 class _SKYNET_KERNEL_DLL_API CCtx_ThreadPool : public basiclib::CBasicObject
 {
 public:
+	static void CreateThreadPool(CCtx_ThreadPool* pPool, const std::function<void*(CCorutinePlusThreadData*)>& pCreateFunc, const std::function<void(void*)>& pReleaseParamFunc);
 	static CCtx_ThreadPool* GetThreadPool();
 	static CCorutinePlusThreadData* GetOrCreateSelfThreadData();
-	static void CreateThreadPool(CCtx_ThreadPool* pPool);
+
 public:
 	//必须实现的虚函数
 	virtual const char* GetCtxInitString(InitGetParamType nType, const char* pParam, const char* pDefault) = 0;
@@ -53,18 +55,19 @@ public:
 	virtual ~CCtx_ThreadPool();
 
 	//! 初始化
-	virtual bool Init(const std::function<void*(CCorutinePlusThreadData*)>& pCreateFunc, 
-		const std::function<void(void*)>& pReleaseParamFunc);
+	virtual bool Init();
 	//! 等待退出
 	void Wait();
-
-    //! 注册测试用接口
-    void RegisterServerForDebug(const char* pName, CCFrameServer_Frame* pRegister);
-    CCFrameServer_Frame* GetRegisterServer(const char* pName);
+	//! 主动设置退出
+	void SetClose();
+	//获取默认的dll
+	uint32_t GetDefaultHttp() { return m_nDefaultHttpCtxID; }
 public:
 	basiclib::CBasicThreadTLS& GetTLS(){ return m_threadIndexTLS; }
     CBasicOnTimer& GetOnTimerModule(){ return m_ontimerModule; }
 	CMQMgr& GetGlobalMQMgr(){ return m_globalMQMgrModule; }
+	CXKRSAManager& GetRSAMgr() { return m_rsaMgr; }
+	bool GetSetClose() { return m_bSetClose; }
 public:
     //创建ctx相关
 	CDllRegisterCtxTemplateMgr& GetCtxTemplateRegister(){ return m_mgtDllCtx; }
@@ -77,6 +80,7 @@ protected:
 	void ExecThreadOnMonitor();
 protected:
     std::function<const char*(InitGetParamType, const char* pKey, const char* pDefault)> m_defaultFuncGetConfig;
+	bool														m_bSetClose;
 	bool														m_bRunning;
 	basiclib::CBasicThreadTLS									m_threadIndexTLS;
 	CBasicOnTimer												m_ontimerModule;			//执行ontimer callback
@@ -88,14 +92,17 @@ protected:
 
 	std::function<void*(CCorutinePlusThreadData*)>				m_pCreateFunc;
 	std::function<void(void*)>									m_pReleaseFunc;
+	//ctxhandle
+	CCoroutineCtxHandle											m_gHandle;
 	//ctx管理
 	CDllRegisterCtxTemplateMgr									m_mgtDllCtx;
+	//rsa
+	CXKRSAManager												m_rsaMgr;
+	//默认的http服务
+	uint32_t													m_nDefaultHttpCtxID;
 protected:
 	//不会释放的ctx
 	CCoroutineCtx_Log*											m_pLog;
-    typedef basiclib::basic_map<basiclib::CBasicString, CCFrameServer_Frame*> MapServerFrame;
-    MapServerFrame                                              m_mapServerFrame;
-    basiclib::SpinLock                                          m_Debuglock;
 
     friend class CCoroutineCtxHandle;
 	friend class CCoroutineCtx;

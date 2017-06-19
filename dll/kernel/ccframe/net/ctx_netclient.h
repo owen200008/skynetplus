@@ -24,7 +24,7 @@ public:
     virtual void ReleaseCtx();
 
     //! 协程里面调用Bussiness消息
-    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg);
+    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg);
 
     //! 判断是否连接，如果没有连接发起连接
     void CheckConnect();
@@ -36,9 +36,9 @@ public:
     void SendData(const char* pData, int nLength);
     ////////////////////////////////////////////////////////////////////////////////////////
     //业务类, 全部使用静态函数, 这样可以保证动态库函数可以替换,做到动态更新
-    static void OnTimer(CCoroutineCtx* pCtx, CCtx_CorutinePlusThreadData* pData);
+    static void OnTimer(CCoroutineCtx* pCtx);
 protected:
-    virtual long DispathBussinessMsg_Receive(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg){
+    virtual long DispathBussinessMsg_Receive(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg){
         return 0;
     }
 protected:

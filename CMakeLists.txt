@@ -6,6 +6,11 @@ endif()
 
 project(skynetplusexe)
 
+#目前默认先不用3rd目录下的
+#set(SkynetPlusBasicLibPath ${PROJECT_SOURCE_DIR}/3rd/ccbasic CACHE STRING "BasiclibPath")
+set(SkynetPlusBasicLibPath ${PROJECT_SOURCE_DIR}/../ccbasic CACHE STRING "BasiclibPath")
+set(BasicLibPath ${SkynetPlusBasicLibPath} CACHE PATH "BasicLibPath" FORCE)
+
 if(SkynetPlusOutputPath)
 SET(EXECUTABLE_OUTPUT_PATH ${SkynetPlusOutputPath})
 SET(LIBRARY_OUTPUT_PATH ${SkynetPlusOutputPath})
@@ -25,14 +30,9 @@ endif()
 add_subdirectory(${PROJECT_SOURCE_DIR}/dll/kernel ${PROJECT_BINARY_DIR}/kernel)
 #build interationcenter
 add_subdirectory(${PROJECT_SOURCE_DIR}/dll/interationcenter ${PROJECT_BINARY_DIR}/interationcenter)
-#build sub
-if(SkynetPlusSubDirectory)
-add_subdirectory(${SkynetPlusSubDirectory} ${PROJECT_BINARY_DIR}/subdirectory)
-endif()
 
-set(BasicLibDir ${PROJECT_SOURCE_DIR}/../ccbasic)
-include_directories(${BasicLibDir}/src/inc)
-include_directories(${BasicLibDir}/3rd/libevent/include)
+include_directories(${SkynetPlusBasicLibPath}/src/inc)
+include_directories(${SkynetPlusBasicLibPath}/3rd/libevent/include)
 
 #flag
 set(RunProjectCXX_FLAGS ${CMAKE_CXX_FLAGS})
@@ -41,7 +41,7 @@ set(RunProjectC_FLAGS ${CMAKE_C_FLAGS})
 set(RunProjectLinks_SkynetPlus)
 
 if(MSVC)
-	include_directories(${BasicLibDir}/3rd/libevent/build/include)
+	include_directories(${SkynetPlusBasicLibPath}/3rd/libevent/build/include)
 	set(RunProjectCXX_FLAGS "${RunProjectCXX_FLAGS} /MP")
 	set(RunProjectC_FLAGS "${RunProjectC_FLAGS} /MP")
 	add_definitions(-DUNICODE -D_UNICODE -D__BASICWINDOWS)
@@ -65,5 +65,5 @@ target_link_libraries(skynetplus ${RunProjectLinks_SkynetPlus})
 if(MSVC)
 	add_custom_command(TARGET skynetplus POST_BUILD COMMAND if not exist "\"$(OutDir)conf\"" mkdir "\"$(OutDir)conf\"")
 	add_custom_command(TARGET skynetplus POST_BUILD COMMAND xcopy /Y /Q "\"${PROJECT_SOURCE_DIR}\\conf\\sprotoencode.lua\"" "\"$(OutDir)conf\"")
-	add_custom_command(TARGET skynetplus POST_BUILD COMMAND xcopy /Y /Q "\"${PROJECT_SOURCE_DIR}\\sprotoencode.bat\"" "\"$(OutDir)\"" )
+	add_custom_command(TARGET skynetplus POST_BUILD COMMAND xcopy /Y /Q "\"${PROJECT_SOURCE_DIR}\\script\\sprotoencode.bat\"" "\"$(OutDir)\"" )
 endif()

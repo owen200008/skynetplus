@@ -17,7 +17,7 @@ bool CCFrameServer_Frame::InitServer(const char* pKey, const std::function<const
     char szBuf[64] = { 0 };
     sprintf(szBuf, "%s_serversessionctx", pKey);
     m_pServerSessionCtx = func(InitGetParamType_Config, szBuf, "CCoroutineCtx_CCFrameServerSession");
-    IsErrorHapper(strlen(m_pServerSessionCtx) != 0, CCFrameSCBasicLogEventErrorV(nullptr, "ServerListen createserversessionctx %s 0", szBuf); return false);
+    IsErrorHapper(strlen(m_pServerSessionCtx) != 0, CCFrameSCBasicLogEventErrorV("ServerListen createserversessionctx %s 0", szBuf); return false);
     m_pServer = CreateServer(pKey, func);
     if (m_pServer == nullptr)
         return false;
@@ -37,7 +37,7 @@ CCFrameServer* CCFrameServer_Frame::CreateServer(const char* pKey, const std::fu
     m_pIPTrust = func(InitGetParamType_Config, szBuf, "*");
 
     CCFrameServer* pRet = CCFrameServer::CreateCCFrameServer();
-    pRet->SetClientRecTimeout(nTimeout);
+    pRet->SetClientRecTimeout((uint16_t)nTimeout);
     pRet->SetIpTrust(m_pIPTrust);
     return pRet;
 }
@@ -45,7 +45,7 @@ CCFrameServer* CCFrameServer_Frame::CreateServer(const char* pKey, const std::fu
 //! 开始服务
 void CCFrameServer_Frame::StartServer(basiclib::CBasicPreSend* pPreSend){
     int32_t nRetListen = m_pServer->StartServer(m_pListenAddress, pPreSend);
-    CCFrameSCBasicLogEventV(nullptr, "ServerListen %s(%d)", m_pListenAddress, nRetListen);
+    CCFrameSCBasicLogEventV("ServerListen %s(%d)", m_pListenAddress, nRetListen);
 }
 
 //! 认证通过开启serversession
@@ -56,6 +56,6 @@ bool CCFrameServer_Frame::VerifySuccessCreateServerSession(basiclib::CBasicSessi
     })){
         return true;
     }
-    CCFrameSCBasicLogEvent(nullptr, "VerifySuccessCallback but createctx fail");
+    CCFrameSCBasicLogEvent("VerifySuccessCallback but createctx fail");
     return false;
 }

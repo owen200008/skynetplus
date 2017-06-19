@@ -7,8 +7,9 @@
 #include "net/ctx_redis.h"
 #include "net/ctx_mysql.h"
 #include "net/ctx_netclientsevercommu.h"
+#include "net/ctx_http.h"
 
-CCtxMessageQueue* DispathCtxMsg(CMQMgr* pMgrQueue, moodycamel::ConsumerToken& token, CCtxMessageQueue* pQ, uint32_t& usPacketNumber, CCtx_CorutinePlusThreadData* pThreadData)
+CCtxMessageQueue* DispathCtxMsg(CMQMgr* pMgrQueue, moodycamel::ConsumerToken& token, CCtxMessageQueue* pQ, uint32_t& usPacketNumber, CCorutinePlusThreadData* pCurrentData)
 {
     if (pQ == NULL) {
         pQ = pMgrQueue->GlobalMQPop(token);
@@ -19,7 +20,7 @@ CCtxMessageQueue* DispathCtxMsg(CMQMgr* pMgrQueue, moodycamel::ConsumerToken& to
     CRefCoroutineCtx pCtx = CCoroutineCtxHandle::GetInstance()->GetContextByHandleID(nCtxID);
     if (pCtx == nullptr){
         //发生异常
-        CCFrameSCBasicLogEventError(pThreadData, "分发队列(DispathCtxMsg)找不到ctxid!!!");
+        CCFrameSCBasicLogEventError("分发队列(DispathCtxMsg)找不到ctxid!!!");
         return pMgrQueue->GlobalMQPop(token);
     }
     if (pCtx->IsReleaseCtx()){
@@ -29,24 +30,25 @@ CCtxMessageQueue* DispathCtxMsg(CMQMgr* pMgrQueue, moodycamel::ConsumerToken& to
         while (pQ->MQPop(token, msg)){
             //如果是协程需要归还
             if (msg.m_nType == CTXMESSAGE_TYPE_RUNCOROUTINE){
-                pThreadData->GetCorutinePlusPool()->ReleaseCorutine((CCorutinePlus*)msg.m_pFunc);
+				pCurrentData->GetCorutinePlusPool()->ReleaseCorutine((CCorutinePlus*)msg.m_pFunc);
             }
             msg.FormatMsgQueueToString([&](const char* pData, int nLength)->void{
-                CCFrameSCBasicLogEvent(pThreadData, pData);
+                CCFrameSCBasicLogEvent(pData);
             });
         }
         CCoroutineCtxHandle::GetInstance()->UnRegister(pCtx->GetCtxID());
         return pMgrQueue->GlobalMQPop(token);
     }
-
-    for (uint32_t i = 0; i < usPacketNumber; i++){
+	bool bNoStateCtx = pCtx->IsNoStateCtx();
+    for (uint32_t i = 0; bNoStateCtx || i < usPacketNumber; i++){
         ctx_message msg;
         if (!pQ->MQPop(msg)){
             return pMgrQueue->GlobalMQPop(token);
         }
-        pCtx->DispatchMsg(msg, pThreadData);
+        pCtx->DispatchMsg(msg);
         msg.ReleaseData();
     }
+
     CCtxMessageQueue* pNextQ = pMgrQueue->GlobalMQPop(token);
     if (pNextQ) {
         pMgrQueue->GlobalMQPush(pQ);
@@ -74,7 +76,7 @@ void CCtx_CorutinePlusThreadData::ExecThreadOnWork()
 {
     //创建状态上下文
     if (CCtx_ThreadPool::GetThreadPool()->CreateTemplateObjectCtx(CCtx_ThreadPool::GetThreadPool()->GetCtxInitString(InitGetParamType_Config, "statetemplate", "CCtx_ThreadState"), nullptr, m_pThreadPool->m_defaultFuncGetConfig, &m_threadMgrQueue) == 0){
-        CCFrameSCBasicLogEventErrorV(nullptr, "获取启动的StateTemplate失败%s", CCtx_ThreadPool::GetThreadPool()->GetCtxInitString(InitGetParamType_Config, "statetemplate", "CCtx_ThreadState"));
+        CCFrameSCBasicLogEventErrorV("获取启动的StateTemplate失败%s", CCtx_ThreadPool::GetThreadPool()->GetCtxInitString(InitGetParamType_Config, "statetemplate", "CCtx_ThreadState"));
         return;
     }
 
@@ -86,7 +88,7 @@ void CCtx_CorutinePlusThreadData::ExecThreadOnWork()
 	CCtxMessageQueue* pQ = nullptr;
 	CCtxMessageQueue* pThreadQ = nullptr;
 
-	CCFrameSCBasicLogEventV(this, "启动ExecThreadOnWork %d ThreadID(%d)", basiclib::BasicGetCurrentThreadId(), m_dwThreadID);
+	CCFrameSCBasicLogEventV("启动ExecThreadOnWork %d ThreadID(%d)", basiclib::BasicGetCurrentThreadId(), m_dwThreadID);
 	while (bRunning){
         pQ = DispathCtxMsg(pMgrQueue, m_globalCToken, pQ, usPacketNumber, this);
 		if (pQ == nullptr) {
@@ -95,32 +97,37 @@ void CCtx_CorutinePlusThreadData::ExecThreadOnWork()
 				pMgrQueue->WaitForGlobalMQ(100);
 		}
 	}
-	CCFrameSCBasicLogEventV(this, "退出ExecThreadOnWork %d ThreadID(%d)", basiclib::BasicGetCurrentThreadId(), m_dwThreadID);
+	CCFrameSCBasicLogEventV("退出ExecThreadOnWork %d ThreadID(%d)", basiclib::BasicGetCurrentThreadId(), m_dwThreadID);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-CCtx_ThreadPool* m_pCtxThreadPool;
+CCtx_ThreadPool* m_pCtxThreadPool = nullptr;
 CCtx_ThreadPool* CCtx_ThreadPool::GetThreadPool(){
 	return m_pCtxThreadPool;
 }
-void CCtx_ThreadPool::CreateThreadPool(CCtx_ThreadPool* pPool){
+void CCtx_ThreadPool::CreateThreadPool(CCtx_ThreadPool* pPool, const std::function<void*(CCorutinePlusThreadData*)>& pCreateFunc,
+	const std::function<void(void*)>& pReleaseParamFunc){
 	m_pCtxThreadPool = pPool;
+	m_pCtxThreadPool->m_pCreateFunc = pCreateFunc;
+	m_pCtxThreadPool->m_pReleaseFunc = pReleaseParamFunc;
 }
 CCorutinePlusThreadData* CCtx_ThreadPool::GetOrCreateSelfThreadData(){
     CCorutinePlusThreadData* pRet = (CCorutinePlusThreadData*)m_pCtxThreadPool->m_threadIndexTLS.GetValue();
     if (pRet)
         return pRet;
     return new CCorutinePlusThreadData(&m_pCtxThreadPool->m_threadIndexTLS, [&](CCorutinePlusThreadData* pData)->void*{
-        return m_pCtxThreadPool->m_pCreateFunc(pData);
+		return m_pCtxThreadPool->m_pCreateFunc(pData);
     }, [&](void* pParam)->void{
     });
 }
 //////////////////////////////////////////////////////////////////////////////////////////////
 CCtx_ThreadPool::CCtx_ThreadPool()
 {
+	m_nDefaultHttpCtxID = 0;
 	m_nDPacketNumPerTime = 1;
 	m_bRunning = false;
 	m_pLog = nullptr;
+	m_bSetClose = false;
     m_defaultFuncGetConfig = [&](InitGetParamType type, const char* pKey, const char* pDefault)->const char*{
         return GetCtxInitString(type, pKey, pDefault);
     };
@@ -130,6 +137,7 @@ CCtx_ThreadPool::CCtx_ThreadPool()
     m_mgtDllCtx.Register(CCoroutineCtx_CRedisWatch::CreateTemplate, ReleaseTemplate);
     m_mgtDllCtx.Register(CCoroutineCtx_Mysql::CreateTemplate, ReleaseTemplate);
     m_mgtDllCtx.Register(CCoroutineCtx_NetClientServerCommu::CreateTemplate, ReleaseTemplate);
+	m_mgtDllCtx.Register(CCoroutineCtx_Http::CreateTemplate, ReleaseTemplate);
 }
 
 CCtx_ThreadPool::~CCtx_ThreadPool()
@@ -158,9 +166,13 @@ void CCtx_ThreadPool::ReleaseObjectCtxByCtxID(uint32_t nCtxID)
     }
 }
 
-bool CCtx_ThreadPool::Init(const std::function<void*(CCorutinePlusThreadData*)>& pCreateFunc,
-	const std::function<void(void*)>& pReleaseParamFunc)
-{
+bool CCtx_ThreadPool::Init(){
+	//加载rsa
+	const char* pRSAPath = GetCtxInitString(InitGetParamType_Config, "RSALoadPath", nullptr);
+	if (pRSAPath) {
+		m_rsaMgr.InitFromPath((basiclib::BasicGetModulePath() + pRSAPath).c_str());
+	}
+
 	int nWorkThreadCount = atol(GetCtxInitString(InitGetParamType_Config, "workthread", "4"));
 	m_nDPacketNumPerTime = atol(GetCtxInitString(InitGetParamType_Config, "threadworkpacketnumber", "1"));
 
@@ -176,8 +188,6 @@ bool CCtx_ThreadPool::Init(const std::function<void*(CCorutinePlusThreadData*)>&
 	//log创建即可
 	m_bRunning = true;
 
-	m_pCreateFunc = pCreateFunc;
-	m_pReleaseFunc = pReleaseParamFunc;
 	//创建indextls
 	m_threadIndexTLS.CreateTLS();
 
@@ -191,17 +201,27 @@ bool CCtx_ThreadPool::Init(const std::function<void*(CCorutinePlusThreadData*)>&
 		return CCtx_ThreadPool::GetThreadPool()->GetCtxInitString(InitGetParamType_Config, pParam, "4");
 	});
 
+	if (atol(GetCtxInitString(InitGetParamType_Config, "StartDefaultHttp", "0"))) {
+		m_nDefaultHttpCtxID = CCtx_ThreadPool::GetThreadPool()->CreateTemplateObjectCtx("CCoroutineCtx_Http", nullptr, [&](InitGetParamType type, const char* pKey, const char* pDefault)->const char* {
+			switch (type) {
+			case InitGetParamType_Config:
+				return CCtx_ThreadPool::GetThreadPool()->GetCtxInitString(type, pKey, pDefault);
+				break;
+			}
+			return pDefault;
+		});
+	}
+
 	//main module
     if (CreateTemplateObjectCtx(GetCtxInitString(InitGetParamType_Config, "maintemplate", ""), nullptr, m_defaultFuncGetConfig) == 0){
-        CCFrameSCBasicLogEventErrorV(nullptr, "获取启动的MainTemplate失败%s", GetCtxInitString(InitGetParamType_Config, "maintemplate", ""));
+        CCFrameSCBasicLogEventErrorV("获取启动的MainTemplate失败%s", GetCtxInitString(InitGetParamType_Config, "maintemplate", ""));
         return false;
     }
     return true;
 }
 
 //! 等待退出
-void CCtx_ThreadPool::Wait()
-{
+void CCtx_ThreadPool::Wait(){
 	basiclib::BasicWaitThread(m_hMonitor);
 	for (auto& workHandle : m_vtHandle){
 		basiclib::BasicWaitThread(workHandle);
@@ -221,35 +241,34 @@ THREAD_RETURN ThreadOnWork(void* pArgv)
 }
 
 
-THREAD_RETURN ThreadOnMonitor(void* pArgv)
-{
+THREAD_RETURN ThreadOnMonitor(void* pArgv){
 	//随机因子
     srand((unsigned int)(time(NULL) + basiclib::BasicGetTickTime() + basiclib::BasicGetCurrentThreadId()));
 	CCtx_ThreadPool* pPool = (CCtx_ThreadPool*)pArgv;
 	pPool->ExecThreadOnMonitor();
 	return 0;
 }
-void CCtx_ThreadPool::ExecThreadOnMonitor()
-{
+void CCtx_ThreadPool::ExecThreadOnMonitor(){
 	uint32_t& nTotalCtx = CCoroutineCtx::GetTotalCreateCtx();
-    CCFrameSCBasicLogEventV(nullptr, "启动ExecThreadOnMonitor %d", basiclib::BasicGetCurrentThreadId());
-	while (nTotalCtx != 0){
+    CCFrameSCBasicLogEventV("启动ExecThreadOnMonitor %d", basiclib::BasicGetCurrentThreadId());
+	while (nTotalCtx != 0 && !m_bSetClose){
+		basiclib::BasicSleep(100);
+	}
+	//保证日志处理完成
+	ctx_message msg(0, [](CCoroutineCtx* pCtx, ctx_message*)->void {
+		CCoroutineCtx_Log* pLog = (CCoroutineCtx_Log*)pCtx;
+		pLog->SetCanExit();
+	});
+	CCoroutineCtx::PushMessageByID(CCoroutineCtx_Log::GetLogCtxID(), msg);
+	while (CCoroutineCtx_Log::IsCanExit() == false) {
 		basiclib::BasicSleep(100);
 	}
 	m_bRunning = false;
-    CCFrameSCBasicLogEventV(nullptr, "退出ExecThreadOnMonitor %d", basiclib::BasicGetCurrentThreadId());
+    CCFrameSCBasicLogEventV("退出ExecThreadOnMonitor %d", basiclib::BasicGetCurrentThreadId());
 }
 
-//! 注册测试用接口
-void CCtx_ThreadPool::RegisterServerForDebug(const char* pName, CCFrameServer_Frame* pRegister){
-    basiclib::CSpinLockFunc lock(&m_Debuglock, TRUE);
-    m_mapServerFrame[pName] = pRegister;
-}
-CCFrameServer_Frame* CCtx_ThreadPool::GetRegisterServer(const char* pName){
-    basiclib::CSpinLockFunc lock(&m_Debuglock, TRUE);
-    auto& iter = m_mapServerFrame.find(pName);
-    if (iter != m_mapServerFrame.end())
-        return iter->second;
-    return nullptr;
+//! 主动设置退出
+void CCtx_ThreadPool::SetClose() {
+	m_bSetClose = true;
 }
 

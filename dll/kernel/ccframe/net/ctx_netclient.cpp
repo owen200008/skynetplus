@@ -75,13 +75,12 @@ int32_t CCoroutineCtx_NetClient::OnIdle(basiclib::CBasicSessionNetClient* pSessi
 //! 创建协程
 void CCoroutineCtx_NetClient::Corutine_OnReceiveData(CCorutinePlus* pCorutine){
     CCoroutineCtx* pCurrentCtx = nullptr;
-    CCorutinePlusThreadData* pCurrentData = nullptr;
     ctx_message* pCurrentMsg = nullptr;
     {
         do{
             int nGetParamCount = 0;
             void** pGetParam = GetCoroutineCtxParamInfo(pCorutine, nGetParamCount);
-            IsErrorHapper(nGetParamCount == 3, ASSERT(0); CCFrameSCBasicLogEventErrorV(pCurrentData, "%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nGetParamCount); return);
+            IsErrorHapper(nGetParamCount == 3, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nGetParamCount); return);
             CCorutineStackDataDefault stackData;
             CCoroutineCtx_NetClient* pCtx = (CCoroutineCtx_NetClient*)pGetParam[0];
             stackData.CopyData((const char*)pGetParam[1], *(Net_Int*)pGetParam[2]);//拷贝到堆数据
@@ -90,8 +89,8 @@ void CCoroutineCtx_NetClient::Corutine_OnReceiveData(CCorutinePlus* pCorutine){
             void* pSetParam[nSetParam] = { &stackData };
             int nRetValue = 0;
             if (!WaitExeCoroutineToCtxBussiness(pCorutine, 0, pCtx->GetCtxID(), DEFINEDISPATCH_CORUTINE_NetClient_Receive, nSetParam, pSetParam, nullptr, nRetValue)){
-                ASSERT(0);
-                CCFrameSCBasicLogEventErrorV(nullptr, "%s(%s:%d) WaitExeCoroutineToCtxBussiness FAIL ret(%d)", __FUNCTION__, __FILE__, __LINE__, nRetValue);
+                CCFrameSCBasicLogEventErrorV("%s(%s:%d) WaitExeCoroutineToCtxBussiness FAIL ret(%d)", __FUNCTION__, __FILE__, __LINE__, nRetValue);
+				ASSERT(0);
             }
         } while (false);
     }
@@ -101,7 +100,7 @@ int32_t CCoroutineCtx_NetClient::OnReceive(basiclib::CBasicSessionNetClient* pNo
     if (cbData > 0){
         const int nSetParam = 3;
         void* pSetParam[nSetParam] = { this, (void*)pszData, &cbData };
-        CreateResumeCoroutineCtx(CCoroutineCtx_NetClient::Corutine_OnReceiveData, CCtx_ThreadPool::GetOrCreateSelfThreadData(), 0, nSetParam, pSetParam);
+        CreateResumeCoroutineCtx(CCoroutineCtx_NetClient::Corutine_OnReceiveData, 0, nSetParam, pSetParam);
     }
     return BASIC_NET_OK;
 }
@@ -110,7 +109,7 @@ int32_t CCoroutineCtx_NetClient::OnDisconnect(basiclib::CBasicSessionNetClient* 
     return BASIC_NET_OK;
 }
 
-void CCoroutineCtx_NetClient::OnTimer(CCoroutineCtx* pCtx, CCtx_CorutinePlusThreadData* pData){
+void CCoroutineCtx_NetClient::OnTimer(CCoroutineCtx* pCtx){
     CCoroutineCtx_NetClient* pRedisCtx = (CCoroutineCtx_NetClient*)pCtx;
     pRedisCtx->OnTimerNetClient();
 }
@@ -120,12 +119,12 @@ void CCoroutineCtx_NetClient::OnTimerNetClient(){
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //! 协程里面调用Bussiness消息
-int CCoroutineCtx_NetClient::DispathBussinessMsg(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg){
+int CCoroutineCtx_NetClient::DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg){
     switch (nType){
     case DEFINEDISPATCH_CORUTINE_NetClient_Receive:
-        return DispathBussinessMsg_Receive(pCorutine, pData, nParam, pParam, pRetPacket, pCurrentMsg);
+        return DispathBussinessMsg_Receive(pCorutine, nParam, pParam, pRetPacket, pCurrentMsg);
     default:
-		CCFrameSCBasicLogEventErrorV(pData, "%s(%s:%d) unknow type(%d) nParam(%d)", __FUNCTION__, __FILE__, __LINE__, nType, nParam);
+		CCFrameSCBasicLogEventErrorV("%s(%s:%d) unknow type(%d) nParam(%d)", __FUNCTION__, __FILE__, __LINE__, nType, nParam);
         break;
     }
     return -99;

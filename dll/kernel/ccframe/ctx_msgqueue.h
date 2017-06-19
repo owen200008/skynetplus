@@ -20,8 +20,7 @@
 //执行函数的定义
 class CCoroutineCtx;
 struct ctx_message;
-class CCtx_CorutinePlusThreadData;
-typedef void(*pRunFuncCtxMessageCallback)(CCoroutineCtx*, ctx_message*, CCtx_CorutinePlusThreadData* pData);
+typedef void(*pRunFuncCtxMessageCallback)(CCoroutineCtx*, ctx_message*);
 
 #pragma	pack(1)
 struct _SKYNET_KERNEL_DLL_API ctx_message

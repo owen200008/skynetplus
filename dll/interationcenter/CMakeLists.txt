@@ -6,13 +6,11 @@ endif()
 
 project(interationcenterdll)
 
-set(BasicLibDir ${PROJECT_SOURCE_DIR}/../../../ccbasic)
-
-include_directories(${BasicLibDir}/src/inc)
-include_directories(${BasicLibDir}/3rd/libevent/include)
-include_directories(${BasicLibDir}/3rd/lua/src)
-include_directories(${BasicLibDir}/3rd/cryptopp)
-include_directories(${BasicLibDir}/3rd/rapidjson/include)
+include_directories(${BasicLibPath}/src/inc)
+include_directories(${BasicLibPath}/3rd/libevent/include)
+include_directories(${BasicLibPath}/3rd/lua/src)
+include_directories(${BasicLibPath}/3rd/cryptopp)
+include_directories(${BasicLibPath}/3rd/rapidjson/include)
 include_directories(${PROJECT_SOURCE_DIR}/../..)
 
 #flag
@@ -22,7 +20,7 @@ set(RunProjectC_FLAGS ${CMAKE_C_FLAGS})
 set(RunProjectLinks)
 
 if(MSVC)
-	include_directories(${BasicLibDir}/3rd/libevent/build/include)
+	include_directories(${BasicLibPath}/3rd/libevent/build/include)
 	set(RunProjectCXX_FLAGS "${RunProjectCXX_FLAGS} /MP")
 	set(RunProjectC_FLAGS "${RunProjectC_FLAGS} /MP")
 	add_definitions(-DUNICODE -D_UNICODE -D__BASICWINDOWS -DBASIC_DLL_IMPORTS)
@@ -38,10 +36,10 @@ set(CMAKE_C_FLAGS ${RunProjectC_FLAGS})
 set(RunProjectLinks ${RunProjectLinks} basicdll cryptopp-static kernel)
 
 set(RunProject_SOURCES
-	${BasicLibDir}/src/scbasic/net/net.h
-	${BasicLibDir}/src/scbasic/net/sendbuffer.h
-	${BasicLibDir}/src/scbasic/net/net.cpp
-	${BasicLibDir}/src/scbasic/net/sendbuffer.cpp
+	${BasicLibPath}/src/scbasic/net/net.h
+	${BasicLibPath}/src/scbasic/net/sendbuffer.h
+	${BasicLibPath}/src/scbasic/net/net.cpp
+	${BasicLibPath}/src/scbasic/net/sendbuffer.cpp
     ${PROJECT_SOURCE_DIR}/../skynetplusprotocal/skynetplusprotocal.h
     ${PROJECT_SOURCE_DIR}/../skynetplusprotocal/skynetplusprotocal_auto.h
     ${PROJECT_SOURCE_DIR}/../skynetplusprotocal/skynetplusprotocal_define.h
@@ -62,6 +60,5 @@ target_link_libraries(interationcenter ${RunProjectLinks})
 if(MSVC)
 	add_custom_command(TARGET interationcenter POST_BUILD COMMAND if not exist "\"$(OutDir)conf\"" mkdir "\"$(OutDir)conf\"")
 	add_custom_command(TARGET interationcenter POST_BUILD COMMAND xcopy /Y /Q "\"${PROJECT_SOURCE_DIR}\\..\\..\\conf\\interationcenter.lua\"" "\"$(OutDir)conf\"")
-	add_custom_command(TARGET interationcenter POST_BUILD COMMAND xcopy /Y /Q "\"${PROJECT_SOURCE_DIR}\\..\\..\\interationcenter.bat\"" "\"$(OutDir)\"" )
-	
+	add_custom_command(TARGET interationcenter POST_BUILD COMMAND xcopy /Y /Q "\"${PROJECT_SOURCE_DIR}\\..\\..\\script\\interationcenter.bat\"" "\"$(OutDir)\"" )
 endif()

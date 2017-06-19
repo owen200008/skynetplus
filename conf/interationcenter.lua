@@ -12,7 +12,9 @@ NetThreadCount=2
 workthread=2
 
 --http监听地址
-httpaddress="0.0.0.0:19080"
+StartDefaultHttp=1
+http_Address="0.0.0.0:19080"
+http_iptrust="*"
 
 --加载的动态库
 dlllist="kernel.dll;interationcenter.dll"

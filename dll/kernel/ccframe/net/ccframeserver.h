@@ -57,14 +57,20 @@ class _SKYNET_KERNEL_DLL_API CMoniFrameServerSession : public CCFrameServerSessi
 {
 public:
     CMoniFrameServerSession();
+	CMoniFrameServerSession(bool bLua);
     virtual ~CMoniFrameServerSession();
 
+	uintptr_t GetUniqueID() { return (uintptr_t)this; }
     virtual int32_t Send(void *pData, int32_t cbData, uint32_t dwFlag = 0);
     virtual int32_t Send(basiclib::CBasicSmartBuffer& smBuf, uint32_t dwFlag = 0);
-    void ClearSendBuffer();
-    basiclib::CBasicBitstream* GetSendBuffer(){ return &m_sendData; }
+	int32_t SendForLua(basiclib::CBasicSmartBuffer* pBuffer) { return Send(*pBuffer); }
+	//! bind send callback
+	void BindSendCallback(const std::function<void(uintptr_t nUniqueID, basiclib::CBasicBitstream* pSMBuf)>& func) {
+		m_sendfunc = func;
+	}
 protected:
-    basiclib::CBasicBitstream m_sendData;
+	std::function<void(uintptr_t nUniqueID, basiclib::CBasicBitstream* pSMBuf)>					m_sendfunc;
+	bool																						m_bLua;
 };
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 #pragma warning (pop)

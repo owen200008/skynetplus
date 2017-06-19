@@ -5,22 +5,39 @@ using namespace basiclib;
 
 CreateTemplateSrc(CCoroutineCtx_Log)
 
-CCoroutineCtx_Log* m_pLog = nullptr;
-//! 是否存在
-bool CCoroutineCtx_Log::IsExist(){
-    return m_pLog != nullptr;
-}
+class CTestLog : public CCoroutineCtx_Log {
+public:
+	CTestLog() {
+	}
+	virtual ~CTestLog(){
+		m_bRelease = true;
+	}
+	virtual void LogEvent(int nChannel, const char* pszLog) {
+		printf("TestLog:%s\r\n", pszLog);
+	}
+};
+
+static CTestLog* g_pTestLog = new CTestLog();
+CCoroutineCtx_Log* m_pLog = g_pTestLog;
+
 CCoroutineCtx_Log::CCoroutineCtx_Log(const char* pKeyName, const char* pClassName) : CCoroutineCtx(pKeyName, pClassName)
 {
-
+	m_ctxPacketDealType = PacketDealType_NoState_NoState;
+	m_bCanExit = false;
 }
 
 CCoroutineCtx_Log::~CCoroutineCtx_Log(){
 
 }
-
+bool CCoroutineCtx_Log::IsCanExit() {
+	return m_pLog->m_bCanExit;
+}
 int CCoroutineCtx_Log::InitCtx(CMQMgr* pMQMgr, const std::function<const char*(InitGetParamType, const char* pKey, const char* pDefault)>& func){
+	CTestLog* pLog = dynamic_cast<CTestLog*>(m_pLog);
 	m_pLog = this;
+	if (pLog) {
+		delete pLog;
+	}
     int nRet = CCoroutineCtx::InitCtx(pMQMgr, func);
     if (nRet != 0)
         return nRet;
@@ -41,12 +58,12 @@ int CCoroutineCtx_Log::InitCtx(CMQMgr* pMQMgr, const std::function<const char*(I
 
 //! 不需要自己delete，只要调用release
 void CCoroutineCtx_Log::ReleaseCtx(){
-    CoroutineCtxDelTimer(OnTimerBasicLog);
+	CoroutineCtxDelTimer(OnTimerBasicLog);
     CCoroutineCtx::ReleaseCtx();
 }
 
 //! 协程里面调用Bussiness消息
-int CCoroutineCtx_Log::DispathBussinessMsg(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg){
+int CCoroutineCtx_Log::DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg){
     if (nParam != 2){
         ASSERT(0);
         //使用老方法写入
@@ -56,27 +73,23 @@ int CCoroutineCtx_Log::DispathBussinessMsg(CCorutinePlus* pCorutine, CCtx_Coruti
     basiclib::WriteLogDataBuffer* pWriteLog = (basiclib::WriteLogDataBuffer*)pParam[0];
     int nChannel = *(int*)pParam[1];
     //写日志
-    TRACE("LOG%d:%s\r\n", nChannel, pWriteLog->m_pText);
+    TRACE("LOG%d %s\r\n", nChannel, pWriteLog->m_pText);
     basiclib::BasicWriteByLogDataBuffer(nChannel, *pWriteLog, true);
     return 0;
 }
 
-void CCoroutineCtx_Log::LogEvent(CCorutinePlusThreadData* pThreadData, int nChannel, const char* pszLog){
+void CCoroutineCtx_Log::LogEvent(int nChannel, const char* pszLog){
 	basiclib::WriteLogDataBuffer logData;
 	logData.InitLogData(pszLog);
 	logData.m_lCurTime = time(NULL);
 	logData.m_dwProcessId = basiclib::Basic_GetCurrentProcessId();
 	logData.m_dwThreadId = basiclib::BasicGetCurrentThreadId();
-	if (pThreadData == nullptr){
-        pThreadData = CCtx_ThreadPool::GetOrCreateSelfThreadData();
-    }
     const int nSetParam = 3;
     void* pSetParam[nSetParam] = { this, &logData, &nChannel };
-    CreateResumeCoroutineCtx(CCoroutineCtx_Log::OnLogEventCtx, pThreadData, 0, nSetParam, pSetParam);
+    CreateResumeCoroutineCtx(CCoroutineCtx_Log::OnLogEventCtx, 0, nSetParam, pSetParam);
 }
 
-void CCoroutineCtx_Log::OnLogEventCtx(CCorutinePlus* pCorutine)
-{
+void CCoroutineCtx_Log::OnLogEventCtx(CCorutinePlus* pCorutine){
     bool bFree = false;
     const int nDefaultSize = 512;
     char szBuf[nDefaultSize] = { 0 };
@@ -116,56 +129,53 @@ void CCoroutineCtx_Log::OnLogEventCtx(CCorutinePlus* pCorutine)
     }
 }
 
-void CCoroutineCtx_Log::OnTimerBasicLog(CCoroutineCtx* pCtx, CCtx_CorutinePlusThreadData* pData){
+void CCoroutineCtx_Log::OnTimerBasicLog(CCoroutineCtx* pCtx){
 	basiclib::OnTimerBasicLog();
 }
-
+//! 获取ctx
+uint32_t CCoroutineCtx_Log::GetLogCtxID() {
+	return m_pLog->GetCtxID();
+}
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #define CCFRAME_LOG_MESSAGE_SIZE 256
 void CCFrameSCBasicLogEvent(const char* pszLog){
-	m_pLog->LogEvent(nullptr, 0, pszLog);
+	m_pLog->LogEvent(0, pszLog);
 }
 void CCFrameSCBasicLogEventError(const char* pszLog){
-	m_pLog->LogEvent(nullptr, 1, pszLog);
+	m_pLog->LogEvent(1, pszLog);
 }
 
-void CCFrameSCBasicLogEventV(CCorutinePlusThreadData* pThreadData, const char* pszLog, ...){
+void CCFrameSCBasicLogEventV(const char* pszLog, ...){
 	char tmp[CCFRAME_LOG_MESSAGE_SIZE];
 	va_list argList;
 	va_start(argList, pszLog);
 	int len = vsnprintf(tmp, CCFRAME_LOG_MESSAGE_SIZE, pszLog, argList);
 	va_end(argList);
 	if (len >= 0 && len < CCFRAME_LOG_MESSAGE_SIZE){
-		m_pLog->LogEvent(pThreadData, 0, tmp);
+		m_pLog->LogEvent(0, tmp);
 	}
 	else{
 		CBasicString strLog;
 		va_start(argList, pszLog);
 		strLog.FormatV(pszLog, argList);
 		va_end(argList);
-		m_pLog->LogEvent(pThreadData, 0, strLog.c_str());
+		m_pLog->LogEvent(0, strLog.c_str());
 	}
 }
-void CCFrameSCBasicLogEventErrorV(CCorutinePlusThreadData* pThreadData, const char* pszLog, ...){
+void CCFrameSCBasicLogEventErrorV(const char* pszLog, ...){
 	char tmp[CCFRAME_LOG_MESSAGE_SIZE];
 	va_list argList;
 	va_start(argList, pszLog);
 	int len = vsnprintf(tmp, CCFRAME_LOG_MESSAGE_SIZE, pszLog, argList);
 	va_end(argList);
 	if (len >= 0 && len < CCFRAME_LOG_MESSAGE_SIZE){
-		m_pLog->LogEvent(pThreadData, 1, tmp);
+		m_pLog->LogEvent(1, tmp);
 	}
 	else{
 		CBasicString strLog;
 		va_start(argList, pszLog);
 		strLog.FormatV(pszLog, argList);
 		va_end(argList);
-		m_pLog->LogEvent(pThreadData, 1, strLog.c_str());
+		m_pLog->LogEvent(1, strLog.c_str());
 	}
-}
-void CCFrameSCBasicLogEvent(CCorutinePlusThreadData* pThreadData, const char* pszLog){
-	m_pLog->LogEvent(pThreadData, 0, pszLog);
-}
-void CCFrameSCBasicLogEventError(CCorutinePlusThreadData* pThreadData, const char* pszLog){
-	m_pLog->LogEvent(pThreadData, 1, pszLog);
 }

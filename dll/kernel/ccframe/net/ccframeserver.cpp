@@ -1,4 +1,5 @@
 #include "ccframeserver.h"
+#include "../coroutinedata/coroutinestackdata.h"
 
 CCFrameServer::CCFrameServer(Net_UInt nSessionID) : CNetServerControl(nSessionID){
 }
@@ -82,20 +83,48 @@ int32_t CCFrameServerSession::OnDisconnect(uint32_t dwNetCode){
 }
 //////////////////////////////////////////////////////////////////////////////////////////////
 CMoniFrameServerSession::CMoniFrameServerSession() : CCFrameServerSession(0, nullptr){
-
+	m_bLua = false;
+}
+CMoniFrameServerSession::CMoniFrameServerSession(bool bLua) : CCFrameServerSession(0, nullptr) {
+	m_bLua = bLua;
 }
 CMoniFrameServerSession::~CMoniFrameServerSession(){
-
+	if (m_bLua) {
+		//不需要自己析构
+		m_refSelf->KnowDelRef();
+	}
 }
 
 int32_t CMoniFrameServerSession::Send(void *pData, int32_t cbData, uint32_t dwFlag){
-    m_sendData.AppendData((char*)pData, cbData);
-    return cbData;
+	//切换到lua线程
+	const int nSetParam = 3;
+	void* pSetParam[nSetParam] = { this, pData, &cbData };
+	CreateResumeCoroutineCtx([](CCorutinePlus* pCorutine)->void {
+		int nGetParamCount = 0;
+		void** pGetParam = GetCoroutineCtxParamInfo(pCorutine, nGetParamCount);
+		CCorutineStackDataDefault stackData;
+		CMoniFrameServerSession* pSession = (CMoniFrameServerSession*)pGetParam[0];
+		stackData.CopyData((const char*)pGetParam[1], *(Net_Int*)pGetParam[2]);//拷贝到堆数据
+		uint32_t nDefaultHttpCtxID = CCtx_ThreadPool::GetThreadPool()->GetDefaultHttp();
+		CCoroutineCtx* pCtx = nullptr;
+		ctx_message* pMsg = nullptr;
+		if (!YieldCorutineToCtx(pCorutine, nDefaultHttpCtxID, pCtx, pMsg)){
+			CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nGetParamCount);
+			ASSERT(0);
+			return;
+		}
+		int nStackSize = 0;
+		const char* pStack = stackData.GetData(nStackSize);
+		basiclib::CBasicBitstream ins;
+		ins.BindOutData((char*)pStack, nStackSize);
+		if (pSession->m_sendfunc) {
+			pSession->m_sendfunc((uintptr_t)pSession, &ins);
+		}
+	}, 0, nSetParam, pSetParam);
+	return cbData;
 }
 int32_t CMoniFrameServerSession::Send(basiclib::CBasicSmartBuffer& smBuf, uint32_t dwFlag){
-    m_sendData.AppendData(smBuf.GetDataBuffer(), smBuf.GetDataLength());
-    return smBuf.GetDataLength();
+	//切换到lua线程
+	return Send(smBuf.GetDataBuffer(), smBuf.GetDataLength(), dwFlag);
 }
-void CMoniFrameServerSession::ClearSendBuffer(){
-    m_sendData.SetDataLength(0);
-}
+

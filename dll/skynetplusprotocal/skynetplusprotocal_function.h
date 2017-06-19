@@ -14,16 +14,5 @@ void SendWithSprotoStruct(SendSession& pSession, SprotoStruct& data, basiclib::C
     smThreadSafeBuffer << data;
     pSession->Send(smThreadSafeBuffer);
 }
-template<class SprotoStruct>
-bool InsToSprotoStruct(SprotoStruct& data, char* pData, int nLength){
-    basiclib::CBasicBitstream os;
-    os.BindOutData(pData, nLength);
-    os >> data;
-    if (os.IsReadError()){
-        os.ResetReadError();
-        return false;
-    }
-    return true;
-}
 
 #endif

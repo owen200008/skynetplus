@@ -16,7 +16,7 @@ public:
     virtual void ReleaseCtx();
 	////////////////////////////////////////////////////////////////////////////////////////
 	//业务类, 全部使用静态函数
-    static void OnTimerShowThreadState(CCoroutineCtx* pCtx, CCtx_CorutinePlusThreadData* pData);
+    static void OnTimerShowThreadState(CCoroutineCtx* pCtx);
 };
 
 

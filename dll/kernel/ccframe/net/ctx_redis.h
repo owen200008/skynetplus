@@ -26,8 +26,8 @@ public:
     CCoroutineCtx_RedisInterface(const char* pName, const char* pClassName) : CCoroutineCtx(pName, pClassName){}
     virtual ~CCoroutineCtx_RedisInterface(){}
 
-    virtual bool ReceiveRedisReply(ctx_message* pMsg, CCtx_CorutinePlusThreadData* pData) = 0;
-    virtual void ReceiveRedisDisconnect(ctx_message* pMsg, CCtx_CorutinePlusThreadData* pData) = 0;
+    virtual bool ReceiveRedisReply(ctx_message* pMsg) = 0;
+    virtual void ReceiveRedisDisconnect(ctx_message* pMsg) = 0;
 public:
     virtual void OnNetVerifySuccess() = 0;
     virtual void OnNetIdle() = 0;
@@ -61,8 +61,8 @@ protected:
     bool CheckVerifyDB(basiclib::CBasicSessionNetClient* pNotify, basiclib::CBasicSmartBuffer& smBuf);
 protected:
     //! 执行函数
-    static void Func_ReceiveRedisReply(CCoroutineCtx* pCtx, ctx_message* pMsg, CCtx_CorutinePlusThreadData* pData);
-    static void Func_ReceiveRedisDisconnect(CCoroutineCtx* pCtx, ctx_message* pMsg, CCtx_CorutinePlusThreadData* pData);
+    static void Func_ReceiveRedisReply(CCoroutineCtx* pCtx, ctx_message* pMsg);
+    static void Func_ReceiveRedisDisconnect(CCoroutineCtx* pCtx, ctx_message* pMsg);
 protected:
     void OnNetSuccessVerify();
 protected:
@@ -93,22 +93,22 @@ public:
     virtual void ReleaseCtx();
 
     //! 协程里面调用Bussiness消息
-    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg);
+    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg);
 
     ////////////////////////////////////////////////////////////////////////////////////////
     //业务类, 全部使用静态函数, 这样可以保证动态库函数可以替换,做到动态更新
-    static void OnTimer(CCoroutineCtx* pCtx, CCtx_CorutinePlusThreadData* pData);
+    static void OnTimer(CCoroutineCtx* pCtx);
 protected:
     ////////////////////DispathBussinessMsg
     //! 发送请求
-    long DispathBussinessMsg_0_SendRequest(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, int nParam, void** pParam, void* pRetPacket);
-    long DispathBussinessMsg_1_SendRequest(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, int nParam, void** pParam, void* pRetPacket);
+    long DispathBussinessMsg_0_SendRequest(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket);
+    long DispathBussinessMsg_1_SendRequest(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket);
 protected:
     //! 创建协程
     static void Corutine_OnIdleSendPing(CCorutinePlus* pCorutine);
 protected:
-    virtual bool ReceiveRedisReply(ctx_message* pMsg, CCtx_CorutinePlusThreadData* pData);
-    virtual void ReceiveRedisDisconnect(ctx_message* pMsg, CCtx_CorutinePlusThreadData* pData);
+    virtual bool ReceiveRedisReply(ctx_message* pMsg);
+    virtual void ReceiveRedisDisconnect(ctx_message* pMsg);
 protected:
     virtual void OnNetIdle();
     virtual void OnNetVerifySuccess();
@@ -143,28 +143,28 @@ public:
     virtual void ReleaseCtx();
 
     //! 协程里面调用Bussiness消息
-    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg);
+    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg);
 
     ////////////////////////////////////////////////////////////////////////////////////////
     //业务类, 全部使用静态函数, 这样可以保证动态库函数可以替换,做到动态更新
-    static void OnTimer(CCoroutineCtx* pCtx, CCtx_CorutinePlusThreadData* pData);
+    static void OnTimer(CCoroutineCtx* pCtx);
 protected:
     ////////////////////DispathBussinessMsg
     //! 发送请求 订阅
     //! 1:basiclib::CBasicString 2:sourcectxid 3:nType
-    int DispathBussinessMsg_0_subscribe(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, int nParam, void** pParam);
+    int DispathBussinessMsg_0_subscribe(CCorutinePlus* pCorutine, int nParam, void** pParam);
     //! 1:basiclib::CBasicString 2:sourcectxid 3:nType
-    int DispathBussinessMsg_1_psubscribe(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, int nParam, void** pParam);
+    int DispathBussinessMsg_1_psubscribe(CCorutinePlus* pCorutine, int nParam, void** pParam);
     //! param1 basiclib::CBasicString
-    int DispathBussinessMsg_2_unsubscribe(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, int nParam, void** pParam);
+    int DispathBussinessMsg_2_unsubscribe(CCorutinePlus* pCorutine, int nParam, void** pParam);
     //! param1 basiclib::CBasicString
-    int DispathBussinessMsg_3_punsubscribe(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, int nParam, void** pParam);
+    int DispathBussinessMsg_3_punsubscribe(CCorutinePlus* pCorutine, int nParam, void** pParam);
 protected:
     static void Corutine_Message(CCorutinePlus* pCorutine);
     static void Corutine_PMessage(CCorutinePlus* pCorutine);
 protected:
-    virtual bool ReceiveRedisReply(ctx_message* pMsg, CCtx_CorutinePlusThreadData* pData);
-    virtual void ReceiveRedisDisconnect(ctx_message* pMsg, CCtx_CorutinePlusThreadData* pData);
+    virtual bool ReceiveRedisReply(ctx_message* pMsg);
+    virtual void ReceiveRedisDisconnect(ctx_message* pMsg);
 protected:
     virtual void OnNetIdle();
     virtual void OnNetVerifySuccess();

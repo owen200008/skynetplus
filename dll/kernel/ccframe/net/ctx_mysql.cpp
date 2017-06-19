@@ -78,11 +78,11 @@ int32_t CCoroutineCtx_Mysql::OnConnect(CBasicSessionNetClient* pClient, uint32_t
     PushMessage(ctxMsg);
     return BASIC_NET_HC_RET_HANDSHAKE;
 }
-void CCoroutineCtx_Mysql::Func_ReceiveMysqlConnect(CCoroutineCtx* pCtx, ctx_message* pMsg, CCtx_CorutinePlusThreadData* pData){
+void CCoroutineCtx_Mysql::Func_ReceiveMysqlConnect(CCoroutineCtx* pCtx, ctx_message* pMsg){
     CCoroutineCtx_Mysql* pMySql = (CCoroutineCtx_Mysql*)pCtx;
-    pMySql->ReceiveMysqlConnect(pMsg, pData);
+    pMySql->ReceiveMysqlConnect(pMsg);
 }
-void CCoroutineCtx_Mysql::ReceiveMysqlConnect(ctx_message* pMsg, CCtx_CorutinePlusThreadData* pData){
+void CCoroutineCtx_Mysql::ReceiveMysqlConnect(ctx_message* pMsg){
     m_smRecvData.SetDataLength(0);
 }
 
@@ -92,18 +92,22 @@ int32_t CCoroutineCtx_Mysql::OnDisconnect(basiclib::CBasicSessionNetClient* pNot
     return BASIC_NET_OK;
 }
 
-void CCoroutineCtx_Mysql::Func_ReceiveMysqlDisconnect(CCoroutineCtx* pCtx, ctx_message* pMsg, CCtx_CorutinePlusThreadData* pData){
+void CCoroutineCtx_Mysql::Func_ReceiveMysqlDisconnect(CCoroutineCtx* pCtx, ctx_message* pMsg){
     CCoroutineCtx_Mysql* pMySql = (CCoroutineCtx_Mysql*)pCtx;
-    pMySql->ReceiveMysqlDisconnect(pMsg, pData);
+    pMySql->ReceiveMysqlDisconnect(pMsg);
 }
-void CCoroutineCtx_Mysql::ReceiveMysqlDisconnect(ctx_message* pMsg, CCtx_CorutinePlusThreadData* pData){
-    //发送所有mysql消息断开了
+void CCoroutineCtx_Mysql::ReceiveMysqlDisconnect(ctx_message* pMsg){
+    //发送所有mysql消息断开了,不能保存指针不然指向同一个(最后一个)
+	basiclib::basic_vector<KernelRequestStoreData> vtDeleteRequest;
     m_vtRequest.ForeachData([&](KernelRequestStoreData* pRequest)->void{
-        WaitResumeCoroutineCtxFail(pRequest->m_pCorutine, pData);
+		vtDeleteRequest.push_back(*pRequest);
     });
+	for (auto& deldata : vtDeleteRequest) {
+		WaitResumeCoroutineCtxFail(deldata.m_pCorutine);
+	}
     if (m_vtRequest.GetMQLength() != 0){
         ASSERT(0);
-        CCFrameSCBasicLogEventErrorV(pData, "%s(%s:%d) vtrequest no empty", __FUNCTION__, __FILE__, __LINE__);
+        CCFrameSCBasicLogEventErrorV("%s(%s:%d) vtrequest no empty", __FUNCTION__, __FILE__, __LINE__);
         m_vtRequest.Drop_Queue([&](KernelRequestStoreData* pRequest)->void{});
     }
 }
@@ -115,30 +119,29 @@ int32_t CCoroutineCtx_Mysql::OnIdle(basiclib::CBasicSessionNetClient*, uint32_t 
     }
     return BASIC_NET_OK;
 }
-void CCoroutineCtx_Mysql::Func_ReceiveMysqlIdle(CCoroutineCtx* pCtx, ctx_message* pMsg, CCtx_CorutinePlusThreadData* pData){
+void CCoroutineCtx_Mysql::Func_ReceiveMysqlIdle(CCoroutineCtx* pCtx, ctx_message* pMsg){
     //15s 如果没有发送数据, 就发送ping命令
     const int nSetParam = 1;
     void* pSetParam[nSetParam] = { (CCoroutineCtx_Mysql*)pCtx };
-    CreateResumeCoroutineCtx(CCoroutineCtx_Mysql::Corutine_OnIdleSendPing, CCtx_ThreadPool::GetOrCreateSelfThreadData(), 0, nSetParam, pSetParam);
+    CreateResumeCoroutineCtx(CCoroutineCtx_Mysql::Corutine_OnIdleSendPing, 0, nSetParam, pSetParam);
 }
 
 //! 创建协程
 void CCoroutineCtx_Mysql::Corutine_OnIdleSendPing(CCorutinePlus* pCorutine){
     //外部变量一定要谨慎，线程安全问题
     CCoroutineCtx* pCurrentCtx = nullptr;
-    CCorutinePlusThreadData* pCurrentData = nullptr;
     ctx_message* pCurrentMsg = nullptr;
     {
         int nGetParamCount = 0;
         void** pGetParam = GetCoroutineCtxParamInfo(pCorutine, nGetParamCount);
-        IsErrorHapper(nGetParamCount == 1, ASSERT(0); CCFrameSCBasicLogEventErrorV(pCurrentData, "%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nGetParamCount); return);
+        IsErrorHapper(nGetParamCount == 1, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nGetParamCount); return);
         CCoroutineCtx_Mysql* pMysql = (CCoroutineCtx_Mysql*)pGetParam[0];
 
         MysqlReplyExec replyPacket;
         const int nSetParam = 0;
         int nRetValue = 0;
-        IsErrorHapper(WaitExeCoroutineToCtxBussiness(pCorutine, pMysql->GetCtxID(), pMysql->GetCtxID(), DEFINEDISPATCH_CORUTINE_SQLPING, nSetParam, nullptr, &replyPacket, nRetValue), ASSERT(0); CCFrameSCBasicLogEventErrorV(pCurrentData, "%s(%s:%d) WaitExeCoroutineToCtxBussiness ret(%d)", __FUNCTION__, __FILE__, __LINE__, nRetValue); return);
-        IsErrorHapper(replyPacket.m_cFieldCount == 0x00, ASSERT(0); CCFrameSCBasicLogEventErrorV(pCurrentData, "%s(%s:%d) Receive No OK Packet, Close", __FUNCTION__, __FILE__, __LINE__); pMysql->ErrorClose();return);
+        IsErrorHapper(WaitExeCoroutineToCtxBussiness(pCorutine, pMysql->GetCtxID(), pMysql->GetCtxID(), DEFINEDISPATCH_CORUTINE_SQLPING, nSetParam, nullptr, &replyPacket, nRetValue), ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) WaitExeCoroutineToCtxBussiness ret(%d)", __FUNCTION__, __FILE__, __LINE__, nRetValue); return);
+        IsErrorHapper(replyPacket.m_cFieldCount == 0x00, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) Receive No OK Packet, Close", __FUNCTION__, __FILE__, __LINE__); pMysql->ErrorClose();return);
     }
 }
 
@@ -150,7 +153,7 @@ int32_t CCoroutineCtx_Mysql::OnReceiveVerify(basiclib::CBasicSessionNetClient* p
     int nLength = cbData;
     Net_UChar cField = 0, cPacketNo = 0;
     if (Parse_PacketHead(pDealData, cbData, cField, cPacketNo) < 0){
-        CCFrameSCBasicLogEventErrorV(nullptr, "Mysql OnReceiveVerify解析出现问题,Close!");
+        CCFrameSCBasicLogEventErrorV("Mysql OnReceiveVerify解析出现问题,Close!");
         ErrorClose();
         return BASIC_NET_OK;
     }
@@ -238,7 +241,7 @@ int32_t CCoroutineCtx_Mysql::OnReceiveVerify(basiclib::CBasicSessionNetClient* p
         m_pClient->Send(szAuthBuffer, nTotalLength);
         return BASIC_NET_OK;
     } while (false);
-    CCFrameSCBasicLogEventErrorV(nullptr, "Mysql OnReceiveVerify解析出错, 长度不够,Close!");
+    CCFrameSCBasicLogEventErrorV("Mysql OnReceiveVerify解析出错, 长度不够,Close!");
     ErrorClose();
     return BASIC_NET_OK;
 }
@@ -250,7 +253,7 @@ int32_t CCoroutineCtx_Mysql::OnReceiveVerifyResult(basiclib::CBasicSessionNetCli
     int nLength = cbData;
     Net_UChar cField = 0, cPacketNo;
     if (Parse_PacketHead(pDealData, cbData, cField, cPacketNo) < 0){
-        CCFrameSCBasicLogEventErrorV(nullptr, "Mysql OnReceiveVerifyResult解析出现问题,Close!");
+        CCFrameSCBasicLogEventErrorV("Mysql OnReceiveVerifyResult解析出现问题,Close!");
         ErrorClose();
         return BASIC_NET_OK;
     }
@@ -259,11 +262,11 @@ int32_t CCoroutineCtx_Mysql::OnReceiveVerifyResult(basiclib::CBasicSessionNetCli
     if (cField == 0xff){
         MysqlResultError error;
         ParseErrorPacket(pDealData, nLength, error);
-        CCFrameSCBasicLogEventErrorV(nullptr, "OnReceiveVerifyResult error %d %s %s!", error.m_usErrorID, error.m_strError.c_str(), error.m_szSQLState);
+        CCFrameSCBasicLogEventErrorV("OnReceiveVerifyResult error %d %s %s!", error.m_usErrorID, error.m_strError.c_str(), error.m_szSQLState);
         return BASIC_NET_OK;
     }
     else if (cField == 0xfe){
-        CCFrameSCBasicLogEventError(nullptr, "old pre-4.1 authentication protocol not supported!");
+        CCFrameSCBasicLogEventError("old pre-4.1 authentication protocol not supported!");
         ErrorClose();
         return BASIC_NET_OK;
     }
@@ -271,7 +274,7 @@ int32_t CCoroutineCtx_Mysql::OnReceiveVerifyResult(basiclib::CBasicSessionNetCli
         ErrorClose();
         char szBuf[64] = { 0 };
         sprintf(szBuf, "bad packet type: %d", cField);
-        CCFrameSCBasicLogEventErrorV(nullptr, szBuf);
+        CCFrameSCBasicLogEventErrorV(szBuf);
         return BASIC_NET_OK;
     }
     //认证成功
@@ -282,24 +285,28 @@ int32_t CCoroutineCtx_Mysql::OnReceiveVerifyResult(basiclib::CBasicSessionNetCli
 //! 创建协程
 void CCoroutineCtx_Mysql::Corutine_OnReceiveData(CCorutinePlus* pCorutine){
     CCoroutineCtx* pCurrentCtx = nullptr;
-    CCorutinePlusThreadData* pCurrentData = nullptr;
     ctx_message* pCurrentMsg = nullptr;
     {
         int nGetParamCount = 0;
         void** pGetParam = GetCoroutineCtxParamInfo(pCorutine, nGetParamCount);
-        IsErrorHapper(nGetParamCount == 3, ASSERT(0); CCFrameSCBasicLogEventErrorV(pCurrentData, "%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nGetParamCount); return);
+        IsErrorHapper(nGetParamCount == 3, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nGetParamCount); return);
 		CCorutineStackDataDefault stackData;
         CCoroutineCtx_Mysql* pMysql = (CCoroutineCtx_Mysql*)pGetParam[0];
 		stackData.CopyData((const char*)pGetParam[1], *(Net_Int*)pGetParam[2]);//拷贝到堆数据
 
-        IsErrorHapper(YieldCorutineToCtx(pCorutine, pMysql->GetCtxID(), pCurrentCtx, pCurrentData, pCurrentMsg), ASSERT(0); CCFrameSCBasicLogEventErrorV(pCurrentData, "%s(%s:%d) YieldCorutineToCtx Error", __FUNCTION__, __FILE__, __LINE__); return;);
+        IsErrorHapper(YieldCorutineToCtx(pCorutine, pMysql->GetCtxID(), pCurrentCtx, pCurrentMsg), ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) YieldCorutineToCtx Error", __FUNCTION__, __FILE__, __LINE__); return;);
 		int nStackDataLength = 0;
 		const char* pStack = stackData.GetData(nStackDataLength);
 		pMysql->m_smRecvData.AppendData(pStack, nStackDataLength);
         //notify
-        KernelRequestStoreData* pRequest = pMysql->m_vtRequest.FrontData();
-        IsErrorHapper(nullptr != pRequest, ASSERT(0); CCFrameSCBasicLogEventErrorV(pCurrentData, "%s(%s:%d) NoRequest Error, Close", __FUNCTION__, __FILE__, __LINE__); pMysql->ErrorClose(); return;);
-        IsErrorHapper(WaitResumeCoroutineCtx(pRequest->m_pCorutine, pCurrentCtx, pCurrentData, pCurrentMsg), ASSERT(0); CCFrameSCBasicLogEventErrorV(pCurrentData, "%s(%s:%d) WaitResumeCoroutineCtx Fail", __FUNCTION__, __FILE__, __LINE__); return;)
+		do {
+			KernelRequestStoreData* pRequest = pMysql->m_vtRequest.FrontData();
+			IsErrorHapper(nullptr != pRequest, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) NoRequest Error, Close", __FUNCTION__, __FILE__, __LINE__); pMysql->ErrorClose(); return;);
+			IsErrorHapper(WaitResumeCoroutineCtx(pRequest->m_pCorutine, pCurrentCtx, pCurrentMsg), ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) WaitResumeCoroutineCtx Fail", __FUNCTION__, __FILE__, __LINE__); return;);
+			KernelRequestStoreData* pNextRequest = pMysql->m_vtRequest.FrontData();
+			if (pNextRequest == pRequest || pNextRequest == nullptr)
+				break;
+		} while (true);
     }
 }
 
@@ -307,17 +314,17 @@ int32_t CCoroutineCtx_Mysql::OnReceive(basiclib::CBasicSessionNetClient* pNotify
     if (cbData > 0){
         const int nSetParam = 3;
         void* pSetParam[nSetParam] = { this, (void*)pszData, &cbData };
-        CreateResumeCoroutineCtx(CCoroutineCtx_Mysql::Corutine_OnReceiveData, CCtx_ThreadPool::GetOrCreateSelfThreadData(), 0, nSetParam, pSetParam);
+        CreateResumeCoroutineCtx(CCoroutineCtx_Mysql::Corutine_OnReceiveData, 0, nSetParam, pSetParam);
     }
     return BASIC_NET_OK;
 }
 
-void CCoroutineCtx_Mysql::OnTimer(CCoroutineCtx* pCtx, CCtx_CorutinePlusThreadData* pData){
+void CCoroutineCtx_Mysql::OnTimer(CCoroutineCtx* pCtx){
     CCoroutineCtx_Mysql* pRedisCtx = (CCoroutineCtx_Mysql*)pCtx;
     time_t tmNow = time(NULL);
 
     KernelRequestStoreData* pRequestStore = pRedisCtx->m_vtRequest.FrontData();
-    IsErrorHapper(pRequestStore == nullptr || !pRequestStore->IsTimeOut(tmNow, pRedisCtx->m_nDefaultTimeoutRequest), CCFrameSCBasicLogEventErrorV(pData, "%s(%s:%d) OnTimerMysql Timeout, Close", __FUNCTION__, __FILE__, __LINE__); pRedisCtx->ErrorClose(); return);
+    IsErrorHapper(pRequestStore == nullptr || !pRequestStore->IsTimeOut(tmNow, pRedisCtx->m_nDefaultTimeoutRequest), CCFrameSCBasicLogEventErrorV("%s(%s:%d) OnTimerMysql Timeout, Close", __FUNCTION__, __FILE__, __LINE__); pRedisCtx->ErrorClose(); return);
     //默认一直重连
     pRedisCtx->CheckConnect();
 }
@@ -326,7 +333,7 @@ void CCoroutineCtx_Mysql::OnTimer(CCoroutineCtx* pCtx, CCtx_CorutinePlusThreadDa
 int CCoroutineCtx_Mysql::Parse_PacketHead(unsigned char* pData, int nLength, Net_UChar& cField_count, Net_UChar& packetNO)
 {
     if (nLength < 5){
-        CCFrameSCBasicLogEventErrorV(nullptr, "Mysql Parse_PacketHead解析出错, 长度不够,Close!");
+        CCFrameSCBasicLogEventErrorV("Mysql Parse_PacketHead解析出错, 长度不够,Close!");
         ErrorClose();
         return -2;
     }
@@ -524,35 +531,42 @@ void CCoroutineCtx_Mysql::ParseEOFPacket(unsigned char* pData, int nLength, Mysq
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //! 协程里面调用Bussiness消息
-int CCoroutineCtx_Mysql::DispathBussinessMsg(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg){
+int CCoroutineCtx_Mysql::DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg){
     switch (nType){
     case DEFINEDISPATCH_CORUTINE_SQLEXEC:
-        return DispathBussinessMsg_0_Exec(pCorutine, pData, nParam, pParam, pRetPacket);
+        return DispathBussinessMsg_0_Exec(pCorutine, nParam, pParam, pRetPacket);
     case DEFINEDISPATCH_CORUTINE_SQLQUERY:
-        return DispathBussinessMsg_1_Query(pCorutine, pData, nParam, pParam, pRetPacket);
+        return DispathBussinessMsg_1_Query(pCorutine, nParam, pParam, pRetPacket);
     case DEFINEDISPATCH_CORUTINE_SQLPING:
-        return DispathBussinessMsg_2_Ping(pCorutine, pData, nParam, pParam, pRetPacket);
+        return DispathBussinessMsg_2_Ping(pCorutine, nParam, pParam, pRetPacket);
     case DEFINEDISPATCH_CORUTINE_SQLMULTI:
-        return DispathBussinessMsg_3_Multi(pCorutine, pData, nParam, pParam, pRetPacket);
+        return DispathBussinessMsg_3_Multi(pCorutine, nParam, pParam, pRetPacket);
     default:
-		CCFrameSCBasicLogEventErrorV(pData, "%s(%s:%d) unknow type(%d) nParam(%d)", __FUNCTION__, __FILE__, __LINE__, nType, nParam);
+		CCFrameSCBasicLogEventErrorV("%s(%s:%d) unknow type(%d) nParam(%d)", __FUNCTION__, __FILE__, __LINE__, nType, nParam);
         break;
     }
     return -99;
 }
 
-long CCoroutineCtx_Mysql::DispathBussinessMsg_0_Exec(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, int nParam, void** pParam, void* pRetPacket){
-    IsErrorHapper(nParam == 1, ASSERT(0); CCFrameSCBasicLogEventErrorV(pData, "%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nParam); return -1);
+long CCoroutineCtx_Mysql::DispathBussinessMsg_0_Exec(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket){
+    IsErrorHapper(nParam == 1, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nParam); return -1);
     if (!IsTransmit())
         return -2;
     //! 保存
     CKernelMsgQueueRequestMgr requestMgr(m_vtRequest, pCorutine);
     //! 发送请求
     SendRequestQuery((const char*)pParam[0]);
-    return ExecReply(pCorutine, pData, (MysqlReplyExec*)pRetPacket);
+	//发送完成，直接进入yield，等待唤醒
+	CCoroutineCtx* pCurrentCtx = nullptr;
+	ctx_message* pCurrentMsg = nullptr;
+	if (!YieldCorutineToCtx(pCorutine, 0, pCurrentCtx, pCurrentMsg)) {
+		//代表进来的时候sourcectxid已经不存在了
+		return -1;
+	}
+    return ExecReply(pCorutine, (MysqlReplyExec*)pRetPacket);
 }
 
-long CCoroutineCtx_Mysql::ExecReply(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, MysqlReplyExec* pReplyPacket){
+long CCoroutineCtx_Mysql::ExecReply(CCorutinePlus* pCorutine, MysqlReplyExec* pReplyPacket){
     //! 获取包
     int nRetGet = GetPacketYield(pCorutine, [&](unsigned char* pPacket, int nLength)->int{
         //OK 或者 error
@@ -577,13 +591,13 @@ long CCoroutineCtx_Mysql::ExecReply(CCorutinePlus* pCorutine, CCtx_CorutinePlusT
     }
     else if (nRetGet == 1){
         pReplyPacket->m_pNext = new MysqlReplyExec();
-        return ExecReply(pCorutine, pData, pReplyPacket->m_pNext);
+        return ExecReply(pCorutine, pReplyPacket->m_pNext);
     }
     return 0;
 }
 
-long CCoroutineCtx_Mysql::DispathBussinessMsg_1_Query(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, int nParam, void** pParam, void* pRetPacket){
-    IsErrorHapper(nParam == 1, ASSERT(0); CCFrameSCBasicLogEventErrorV(pData, "%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nParam); return -1);
+long CCoroutineCtx_Mysql::DispathBussinessMsg_1_Query(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket){
+    IsErrorHapper(nParam == 1, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nParam); return -1);
     if (!IsTransmit())
         return -2;
     //! 保存
@@ -592,10 +606,17 @@ long CCoroutineCtx_Mysql::DispathBussinessMsg_1_Query(CCorutinePlus* pCorutine, 
     //! 发送请求
     SendRequestQuery((const char*)pParam[0]);
 
-    return QueryReply(pCorutine, pData, (MysqlReplyQuery*)pRetPacket);
+	//发送完成，直接进入yield，等待唤醒
+	CCoroutineCtx* pCurrentCtx = nullptr;
+	ctx_message* pCurrentMsg = nullptr;
+	if (!YieldCorutineToCtx(pCorutine, 0, pCurrentCtx, pCurrentMsg)) {
+		//代表进来的时候sourcectxid已经不存在了
+		return -1;
+	}
+    return QueryReply(pCorutine, (MysqlReplyQuery*)pRetPacket);
 }
 
-long CCoroutineCtx_Mysql::QueryReply(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, MysqlReplyQuery* pReplyPacket){
+long CCoroutineCtx_Mysql::QueryReply(CCorutinePlus* pCorutine, MysqlReplyQuery* pReplyPacket){
     //! 获取包
     int nRetGet = GetPacketYield(pCorutine, [&](unsigned char* pPacket, int nLength)->int{
         //data
@@ -619,7 +640,7 @@ long CCoroutineCtx_Mysql::QueryReply(CCorutinePlus* pCorutine, CCtx_CorutinePlus
         //error
         return 1;
     else if (nRetGet == 2){
-        CCFrameSCBasicLogEventError(pData, "CCoroutineCtx_Mysql::DispathBussinessMsg_1_Query parse data error, close");
+        CCFrameSCBasicLogEventError("CCoroutineCtx_Mysql::DispathBussinessMsg_1_Query parse data error, close");
         ErrorClose();
         return 2;
     }
@@ -703,13 +724,13 @@ long CCoroutineCtx_Mysql::QueryReply(CCorutinePlus* pCorutine, CCtx_CorutinePlus
             break;
         else if (nRetGet == 5){
             pReplyPacket->m_pNext = new MysqlReplyQuery();
-            return QueryReply(pCorutine, pData, pReplyPacket->m_pNext);
+            return QueryReply(pCorutine, pReplyPacket->m_pNext);
         }
     }
     return 0;
 }
 
-long CCoroutineCtx_Mysql::DispathBussinessMsg_2_Ping(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, int nParam, void** pParam, void* pRetPacket){
+long CCoroutineCtx_Mysql::DispathBussinessMsg_2_Ping(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket){
     if (!IsTransmit())
         return -2;
     //! 保存
@@ -717,12 +738,18 @@ long CCoroutineCtx_Mysql::DispathBussinessMsg_2_Ping(CCorutinePlus* pCorutine, C
 
     //! 发送请求
     SendRequestPing();
-
-    return ExecReply(pCorutine, pData, (MysqlReplyExec*)pRetPacket);
+	//发送完成，直接进入yield，等待唤醒
+	CCoroutineCtx* pCurrentCtx = nullptr;
+	ctx_message* pCurrentMsg = nullptr;
+	if (!YieldCorutineToCtx(pCorutine, 0, pCurrentCtx, pCurrentMsg)) {
+		//代表进来的时候sourcectxid已经不存在了
+		return -1;
+	}
+    return ExecReply(pCorutine, (MysqlReplyExec*)pRetPacket);
 }
 
-long CCoroutineCtx_Mysql::DispathBussinessMsg_3_Multi(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, int nParam, void** pParam, void* pRetPacket){
-    IsErrorHapper(nParam == 1, ASSERT(0); CCFrameSCBasicLogEventErrorV(pData, "%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nParam); return -1);
+long CCoroutineCtx_Mysql::DispathBussinessMsg_3_Multi(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket){
+    IsErrorHapper(nParam == 1, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nParam); return -1);
     if (!IsTransmit())
         return -2;
 
@@ -732,12 +759,12 @@ long CCoroutineCtx_Mysql::DispathBussinessMsg_3_Multi(CCorutinePlus* pCorutine, 
         if (pRequest->m_nType == DEFINEDISPATCH_CORUTINE_SQLEXEC){
             const int nSetParam = 1;
             void* pSetParam[nSetParam] = { (void*)pRequest->m_pSQL };
-            lRet = DispathBussinessMsg_0_Exec(pCorutine, pData, nSetParam, pSetParam, &((MysqlMultiRequestExec*)pRequest)->m_reply);
+            lRet = DispathBussinessMsg_0_Exec(pCorutine, nSetParam, pSetParam, &((MysqlMultiRequestExec*)pRequest)->m_reply);
         }
         else if (pRequest->m_nType == DEFINEDISPATCH_CORUTINE_SQLQUERY){
             const int nSetParam = 1;
             void* pSetParam[nSetParam] = { (void*)pRequest->m_pSQL };
-            lRet = DispathBussinessMsg_1_Query(pCorutine, pData, nSetParam, pSetParam, &((MysqlMultiRequestQuery*)pRequest)->m_reply);
+            lRet = DispathBussinessMsg_1_Query(pCorutine, nSetParam, pSetParam, &((MysqlMultiRequestQuery*)pRequest)->m_reply);
         }
         else{
             return -4;
@@ -767,9 +794,6 @@ void CCoroutineCtx_Mysql::SendRequestPing(){
 //获取一个packet
 int CCoroutineCtx_Mysql::GetPacketYield(CCorutinePlus* pCorutine, const std::function<int(unsigned char* pPacket, int nLength)>& func){
     int nRet = 0;
-    CCoroutineCtx* pCurrentCtx = nullptr;
-    CCorutinePlusThreadData* pCurrentData = nullptr;
-    ctx_message* pCurrentMsg = nullptr;
     do{
         long lRet = m_smRecvData.IsPacketFull(m_maxPacketSize);
         if (lRet == MYSQLCONNECT_LOCATION_HEADER_FIND){
@@ -782,7 +806,7 @@ int CCoroutineCtx_Mysql::GetPacketYield(CCorutinePlus* pCorutine, const std::fun
             return -2;
         }
         else{
-            if (!YieldCorutineToCtx(pCorutine, 0, pCurrentCtx, pCurrentData, pCurrentMsg)){
+            if (!YieldAndResumeSelf(pCorutine)){
                 //代表进来的时候sourcectxid已经不存在了
                 return -1;
             }
@@ -796,13 +820,14 @@ bool CCFrameMysqlExec(uint32_t nResCtxID, uint32_t nMysqlCtxID, CCorutinePlus* p
     void* pSetParam[nSetParam] = { (void*)pSQL };
     int nRetValue = 0;
     if (!WaitExeCoroutineToCtxBussiness(pCorutine, nResCtxID, nMysqlCtxID, DEFINEDISPATCH_CORUTINE_SQLEXEC, nSetParam, pSetParam, &replyPacket, nRetValue)){
-        CCFrameSCBasicLogEventErrorV(nullptr, "CCFrameMysqlExec error %s ret %d", pSQL, nRetValue);
+        CCFrameSCBasicLogEventErrorV("CCFrameMysqlExec error %s ret %d", pSQL, nRetValue);
         return false;
     }
     //判断是否执行成功
     MysqlReplyExec* pCheck = &replyPacket;
     do{
         if (pCheck->m_cFieldCount != 0x00){
+			CCFrameSCBasicLogEventErrorV("CCFrameMysqlQuery error %s ret %d", pSQL, nRetValue);
             return false;
         }
         pCheck = pCheck->m_pNext;
@@ -814,25 +839,63 @@ bool CCFrameMysqlQuery(uint32_t nResCtxID, uint32_t nMysqlCtxID, CCorutinePlus* 
     void* pSetParam[nSetParam] = { (void*)pSQL };
     int nRetValue = 0;
     if (!WaitExeCoroutineToCtxBussiness(pCorutine, nResCtxID, nMysqlCtxID, DEFINEDISPATCH_CORUTINE_SQLQUERY, nSetParam, pSetParam, &replyPacket, nRetValue)){
-        CCFrameSCBasicLogEventErrorV(nullptr, "CCFrameMysqlQuery error %s ret %d", pSQL, nRetValue);
+        CCFrameSCBasicLogEventErrorV("CCFrameMysqlQuery error %s ret %d", pSQL, nRetValue);
         return false;
     }
+	if (nRetValue != 0)
+		return false;
     MysqlReplyQuery* pCheck = &replyPacket;
     do{
-        if (pCheck->m_cFieldCount > 250){
+        if (pCheck->m_cFieldCount == 0xff){
+			CCFrameSCBasicLogEventErrorV("CCFrameMysqlQuery error %s ret %d", pSQL, nRetValue);
             return false;
         }
         pCheck = pCheck->m_pNext;
     } while (pCheck);
     return true;
 }
-long CCFrameMysqlMulty(uint32_t nResCtxID, uint32_t nMysqlCtxID, CCorutinePlus* pCorutine, MysqlMultiRequest* pRequest){
+bool CCFrameMysqlMulty(uint32_t nResCtxID, uint32_t nMysqlCtxID, CCorutinePlus* pCorutine, MysqlMultiRequest* pRequest){
     const int nSetParam = 1;
     void* pSetParam[nSetParam] = { (void*)pRequest };
     int nRetValue = 0;
     if (!WaitExeCoroutineToCtxBussiness(pCorutine, nResCtxID, nMysqlCtxID, DEFINEDISPATCH_CORUTINE_SQLMULTI, nSetParam, pSetParam, nullptr, nRetValue)){
-        CCFrameSCBasicLogEventErrorV(nullptr, "CCFrameMysqlMulty error ret %d", nRetValue);
-        return -1;
+		Net_CBasicBitstream ins;
+		char szBuf[2048] = { 0 };
+		while (pRequest) {
+			sprintf(szBuf, "SQL:(%d)%s\r\n", pRequest->m_nType, pRequest->m_pSQL);
+			ins.AppendString(szBuf);
+			pRequest = pRequest->m_pNext;
+		}
+        CCFrameSCBasicLogEventErrorV("CCFrameMysqlMulty error ret %d(%s)", nRetValue, ins.GetDataBuffer());
+        return false;
     }
-    return nRetValue;
+	while (pRequest) {
+		if (pRequest->m_nType == DEFINEDISPATCH_CORUTINE_SQLEXEC) {
+			MysqlMultiRequestExec* pReply = (MysqlMultiRequestExec*)pRequest;
+			MysqlReplyExec* pCheck = &pReply->m_reply;
+			do {
+				if (pCheck->m_cFieldCount != 0x00) {
+					CCFrameSCBasicLogEventErrorV("CCFrameMysqlMulty error %s ret %d", pRequest->m_pSQL, nRetValue);
+					return false;
+				}
+				pCheck = pCheck->m_pNext;
+			} while (pCheck);
+		}
+		else if (pRequest->m_nType == DEFINEDISPATCH_CORUTINE_SQLQUERY) {
+			MysqlMultiRequestQuery* pReply = (MysqlMultiRequestQuery*)pRequest;
+			MysqlReplyQuery* pCheck = &pReply->m_reply;
+			do {
+				if (pCheck->m_cFieldCount == 0xff) {
+					CCFrameSCBasicLogEventErrorV("CCFrameMysqlMulty error %s ret %d", pRequest->m_pSQL, nRetValue);
+					return false;
+				}
+				pCheck = pCheck->m_pNext;
+			} while (pCheck);
+		}
+		else {
+			return false;
+		}
+		pRequest = pRequest->m_pNext;
+	}
+    return true;
 }

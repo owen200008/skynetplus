@@ -23,14 +23,17 @@ enum WakeUpCorutineType
     WakeUpCorutineType_Success = 0,
 };
 
+#define PacketDealType_NoState_Mask		0x0000000F
+#define PacketDealType_NoState_NoState	0x00000001
+
 #pragma warning (push)
 #pragma warning (disable: 4251)
 #pragma warning (disable: 4275)
 typedef fastdelegate::FastDelegate0<void> HandleOnTimer;			//错误消息
 typedef void(*pCallOnTimerFunc)();
 class CCoroutineCtx;
-class CCtx_CorutinePlusThreadData;
-typedef void(*pCallbackOnTimerFunc)(CCoroutineCtx* pCtx, CCtx_CorutinePlusThreadData* pData);
+typedef void(*pCallbackOnTimerFunc)(CCoroutineCtx* pCtx);
+struct lua_State;
 class _SKYNET_KERNEL_DLL_API CCoroutineCtx : public basiclib::CBasicObject, public basiclib::EnableRefPtr<CCoroutineCtx>
 {
 public:
@@ -58,6 +61,15 @@ public:
 
     //! 获取状态
     virtual void GetState(basiclib::CBasicSmartBuffer& smBuf);
+
+	//! 是否无状态ctx,在处理包的时候连续处理，不存在处理一个放回队列的问题
+	bool IsNoStateCtx() { return PacketDealType_NoState_Mask & m_ctxPacketDealType; }
+
+	//! yield by resume self（必须自己唤醒的yield）
+	bool YieldAndResumeSelf(CCorutinePlus* pCorutine);
+
+	//! 测试接口
+	virtual bool DebugInterface(const char* pDebugInterface, uint32_t nType, lua_State* L);
 public:
     //! 必须是全局不析构的字符串,只保存指针
     CCoroutineCtx(const char* pName = nullptr, const char* pClassName = GlobalGetClassName(CCoroutineCtx));
@@ -74,10 +86,10 @@ public:
     virtual int InitCtx(CMQMgr* pMQMgr, const std::function<const char*(InitGetParamType, const char* pKey, const char* pDefault)>& func);
 
 	//!	分配任务
-    virtual void DispatchMsg(ctx_message& msg, CCtx_CorutinePlusThreadData* pData);
+    virtual void DispatchMsg(ctx_message& msg);
 
     //! 协程里面调用Bussiness消息
-    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, CCtx_CorutinePlusThreadData* pData, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg);
+    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg);
 
 protected:
     //! 分配一个新的sessionid
@@ -92,6 +104,8 @@ protected:
     const char*                                 m_pClassName;
 	CCtxMessageQueue							m_ctxMsgQueue;
 	moodycamel::ConsumerToken					m_Ctoken;		//优化读取
+	//处理模式
+	uint32_t									m_ctxPacketDealType;
 
 	//统计总共创建的上下文
 	static uint32_t				m_nTotalCtx;
@@ -104,13 +118,13 @@ typedef basiclib::CBasicRefPtr<CCoroutineCtx> CRefCoroutineCtx;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //!协程相关
 //! 创建协程,返回false代表要传输的目的ctxid已经不存在
-_SKYNET_KERNEL_DLL_API bool CreateResumeCoroutineCtx(coroutine_func func, CCorutinePlusThreadData* pData, uint32_t nSourceCtxID, int nParam, void* pParam);
+_SKYNET_KERNEL_DLL_API bool CreateResumeCoroutineCtx(coroutine_func func, uint32_t nSourceCtxID, int nParam, void* pParam);
 
 //! 唤醒协程执行
-_SKYNET_KERNEL_DLL_API bool WaitResumeCoroutineCtx(CCorutinePlus* pCorutine, CCoroutineCtx* pCtx, CCorutinePlusThreadData* pData, ctx_message* pMsg);
+_SKYNET_KERNEL_DLL_API bool WaitResumeCoroutineCtx(CCorutinePlus* pCorutine, CCoroutineCtx* pCtx, ctx_message* pMsg);
 
 //! 唤醒协程执行失败
-_SKYNET_KERNEL_DLL_API void WaitResumeCoroutineCtxFail(CCorutinePlus* pCorutine, CCorutinePlusThreadData* pData);
+_SKYNET_KERNEL_DLL_API void WaitResumeCoroutineCtxFail(CCorutinePlus* pCorutine);
 
 //! 执行DstCtxID的nType函数,返回false需要保证pCorutine线程退出，不然会出现这个协程泄漏, 提供参数序列化和反序列化方法
 _SKYNET_KERNEL_DLL_API bool WaitExeCoroutineToCtxBussiness(CCorutinePlus* pCorutine, uint32_t nSourceCtxID, uint32_t nDstCtxID, uint32_t nType, int nParam, void** pParam, void* pRetPacket, int& nRetValue);
@@ -131,7 +145,7 @@ struct ServerCommuSerialize{
 _SKYNET_KERNEL_DLL_API void RegisterSerializeAndUnSerialize(uint32_t nDstCtxID, uint32_t nType, ServerCommuSerialize& func, bool bSelfCtx = false);
 
 //! yield协程
-_SKYNET_KERNEL_DLL_API bool YieldCorutineToCtx(CCorutinePlus* pCorutine, uint32_t nNextCtxID, CCoroutineCtx*& pCtx, CCorutinePlusThreadData*& pData, ctx_message*& pMsg);
+_SKYNET_KERNEL_DLL_API bool YieldCorutineToCtx(CCorutinePlus* pCorutine, uint32_t nNextCtxID, CCoroutineCtx*& pCtx, ctx_message*& pMsg);
 
 //! 获取参数个数和参数,只能在resume之后调用
 _SKYNET_KERNEL_DLL_API void** GetCoroutineCtxParamInfo(CCorutinePlus* pCorutine, int& nCount);

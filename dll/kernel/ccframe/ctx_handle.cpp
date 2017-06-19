@@ -4,14 +4,15 @@
 #include "net/ctx_netclientsevercommu.h"
 #include "ctx_threadpool.h"
 
-static CCoroutineCtxHandle m_gHandle;
+CCoroutineCtxHandle* m_pHandle = nullptr;
 CCoroutineCtxHandle* CCoroutineCtxHandle::GetInstance()
 {
-    return &m_gHandle;
+    return m_pHandle;
 }
 
 CCoroutineCtxHandle::CCoroutineCtxHandle()
 {
+	m_pHandle = this;
     m_pClient = nullptr;
     m_handle_index = HANDLE_ID_BEGIN;
     m_releaseHandleID.reserve(0xffff);
@@ -47,7 +48,7 @@ uint32_t CCoroutineCtxHandle::Register(CCoroutineCtx* pCtx){
             if (pCtx->m_bFixCtxID != 0){
                 uHandleID = pCtx->m_bFixCtxID;
                 if (m_mapIDToCtx.find(uHandleID) != m_mapIDToCtx.end()){
-                    CCFrameSCBasicLogEventErrorV(nullptr, "%s(%s:%d) exist globalctx %d", __FUNCTION__, __FILE__, __LINE__, pCtx->m_bFixCtxID);
+                    CCFrameSCBasicLogEventErrorV("%s(%s:%d) exist globalctx %d", __FUNCTION__, __FILE__, __LINE__, pCtx->m_bFixCtxID);
                 }
                 if (pCtx->m_bUseForServer == false){
                     bRegisterGlobal = true;
@@ -68,28 +69,22 @@ uint32_t CCoroutineCtxHandle::Register(CCoroutineCtx* pCtx){
             const int nSetParam = 3;
             void* pSetParam[nSetParam] = { (void*)pCtxName, &uHandleID, m_pClient };
             CreateResumeCoroutineCtx([](CCorutinePlus* pCorutine)->void{
-                //外部变量一定要谨慎，线程安全问题
-                CCoroutineCtx* pCurrentCtx = nullptr;
-                CCorutinePlusThreadData* pCurrentData = nullptr;
-                ctx_message* pCurrentMsg = nullptr;
-                CCorutineStackDataDefault stackData;
                 {
                     int nGetParamCount = 0;
                     void** pGetParam = GetCoroutineCtxParamInfo(pCorutine, nGetParamCount);
-                    IsErrorHapper(nGetParamCount == 3, ASSERT(0); CCFrameSCBasicLogEventErrorV(pCurrentData, "%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nGetParamCount); return);
+                    IsErrorHapper(nGetParamCount == 3, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nGetParamCount); return);
                     const char* pCtxName = (const char*)pGetParam[0];
                     uint32_t uCtxID = *(uint32_t*)pGetParam[1];
                     CCoroutineCtx_NetClientServerCommu* pClient = (CCoroutineCtx_NetClientServerCommu*)pGetParam[2];
-
                     const int nSetParam = 2;
                     void* pSetParam[nSetParam] = { pGetParam[0], &uCtxID };
                     int nRetValue = 0;
                     if (!WaitExeCoroutineToCtxBussiness(pCorutine, 0, pClient->GetCtxID(), DEFINEDISPATCH_CORUTINE_NetClient_CreateMap, nSetParam, pSetParam, nullptr, nRetValue)){
-                        ASSERT(0);
-                        CCFrameSCBasicLogEventErrorV(nullptr, "%s(%s:%d) WaitExeCoroutineToCtxBussiness FAIL ret(%d)", __FUNCTION__, __FILE__, __LINE__, nRetValue);
+                        CCFrameSCBasicLogEventErrorV("%s(%s:%d) WaitExeCoroutineToCtxBussiness FAIL ret(%d)", __FUNCTION__, __FILE__, __LINE__, nRetValue);
+						ASSERT(0);
                     }
                 }
-            }, CCtx_ThreadPool::GetOrCreateSelfThreadData(), 0, nSetParam, pSetParam);
+            }, 0, nSetParam, pSetParam);
         }
     }
 	return uHandleID;
@@ -126,27 +121,22 @@ int CCoroutineCtxHandle::UnRegister(uint32_t uHandleID)
                 const int nSetParam = 2;
                 void* pSetParam[nSetParam] = { (void*)pCtxName, m_pClient };
                 CreateResumeCoroutineCtx([](CCorutinePlus* pCorutine)->void{
-                    //外部变量一定要谨慎，线程安全问题
-                    CCoroutineCtx* pCurrentCtx = nullptr;
-                    CCorutinePlusThreadData* pCurrentData = nullptr;
-                    ctx_message* pCurrentMsg = nullptr;
-                    CCorutineStackDataDefault stackData;
                     {
                         int nGetParamCount = 0;
                         void** pGetParam = GetCoroutineCtxParamInfo(pCorutine, nGetParamCount);
-                        IsErrorHapper(nGetParamCount == 2, ASSERT(0); CCFrameSCBasicLogEventErrorV(pCurrentData, "%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nGetParamCount); return);
+                        IsErrorHapper(nGetParamCount == 2, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nGetParamCount); return);
                         const char* pCtxName = (const char*)pGetParam[0];
                         CCoroutineCtx_NetClientServerCommu* pClient = (CCoroutineCtx_NetClientServerCommu*)pGetParam[2];
 
-                        const int nSetParam = 2;
-                        void* pSetParam[nSetParam] = { pGetParam[1], &stackData };
+                        const int nSetParam = 1;
+                        void* pSetParam[nSetParam] = { pGetParam[1] };
                         int nRetValue = 0;
                         if (!WaitExeCoroutineToCtxBussiness(pCorutine, 0, pClient->GetCtxID(), DEFINEDISPATCH_CORUTINE_NetClient_DeleteMap, nSetParam, pSetParam, nullptr, nRetValue)){
-                            ASSERT(0);
-                            CCFrameSCBasicLogEventErrorV(nullptr, "%s(%s:%d) WaitExeCoroutineToCtxBussiness FAIL ret(%d)", __FUNCTION__, __FILE__, __LINE__, nRetValue);
+                            CCFrameSCBasicLogEventErrorV("%s(%s:%d) WaitExeCoroutineToCtxBussiness FAIL ret(%d)", __FUNCTION__, __FILE__, __LINE__, nRetValue);
+							ASSERT(0);
                         }
                     }
-                }, CCtx_ThreadPool::GetOrCreateSelfThreadData(), 0, nSetParam, pSetParam);
+                }, 0, nSetParam, pSetParam);
             }
         }
 		ret = 1;
@@ -165,14 +155,14 @@ uint32_t CCoroutineCtxHandle::GetCtxIDByName(const char* pName, CCorutinePlus* p
     }
 
     //去全局查找
-    if (m_pClient){
+    if (m_pClient && pCorutine){
         const int nSetParam = 1;
         void* pSetParam[nSetParam] = { (void*)pName };
         int nRetValue = 0;
         SkynetPlusGetCtxIDByNameResponse response;
         if (!WaitExeCoroutineToCtxBussiness(pCorutine, nResCtxID, m_pClient->GetCtxID(), DEFINEDISPATCH_CORUTINE_NetClient_GetMap, nSetParam, pSetParam, &response, nRetValue)){
             ASSERT(0);
-            CCFrameSCBasicLogEventErrorV(nullptr, "%s(%s:%d) WaitExeCoroutineToCtxBussiness FAIL ret(%d)", __FUNCTION__, __FILE__, __LINE__, nRetValue);
+            CCFrameSCBasicLogEventErrorV("%s(%s:%d) WaitExeCoroutineToCtxBussiness FAIL ret(%d)", __FUNCTION__, __FILE__, __LINE__, nRetValue);
         }
         if (response.m_nError == 0)
             return response.m_nCtxID;
@@ -214,7 +204,7 @@ uint32_t CCoroutineCtxHandle::GetNewHandleID()
 	if (uRetHandleID > HANDLE_ID_ALLOCATE_LOG)
 	{
         //100 log
-        CCFrameSCBasicLogEventErrorV(nullptr, "HandleID Allocate warning %x, need restart!!", uRetHandleID);
+        CCFrameSCBasicLogEventErrorV("HandleID Allocate warning %x, need restart!!", uRetHandleID);
 	}
 	return uRetHandleID;
 }

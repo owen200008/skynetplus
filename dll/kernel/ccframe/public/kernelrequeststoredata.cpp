@@ -21,5 +21,8 @@ CKernelMsgQueueRequestMgr::CKernelMsgQueueRequestMgr(MsgQueueRequestStoreData& v
 CKernelMsgQueueRequestMgr::~CKernelMsgQueueRequestMgr(){
     KernelRequestStoreData request;
     m_vtRequest.MQPop(&request);
-    ASSERT(request.m_pCorutine == m_pCorutine);
+	if (request.m_pCorutine != m_pCorutine) {
+		ASSERT(0);
+	}
+    //ASSERT(request.m_pCorutine == m_pCorutine);
 }

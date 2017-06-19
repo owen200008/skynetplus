@@ -2,6 +2,7 @@
 #define SKYNETPLUS_COROUTINESTACKDATA_H
 
 #include <basic.h>
+#include "../../kernel_head.h"
 
 template<size_t defaultSize = 4096>
 class CCorutineStackData : public basiclib::CBasicObject
@@ -41,6 +42,32 @@ protected:
 };
 typedef CCorutineStackData<16384>   CCorutineStackDataDefault;
 /////////////////////////////////////////////////////////////////////////////////////////////////////
+template<class SprotoStruct>
+bool InsToSprotoStructDefaultStack(SprotoStruct& data, CCorutineStackDataDefault*& pDefaultStack) {
+	int nStackDataLength = 0;
+	char* pStackData = (char*)pDefaultStack->GetData(nStackDataLength);
+	//这边赋值为nullptr，因为这个内部的数据结构以及被改变不能再使用
+	pDefaultStack = nullptr;
+	basiclib::CBasicBitstream os;
+	os.BindOutData(pStackData, nStackDataLength);
+	os >> data;
+	if (os.IsReadError()) {
+		os.ResetReadError();
+		return false;
+	}
+	return true;
+}
+template<class SprotoStruct>
+bool InsToSprotoStructSMBuffer(SprotoStruct& data, basiclib::CBasicBitstream& os) {
+	os >> data;
+	if (os.IsReadError()) {
+		os.ResetReadError();
+		return false;
+	}
+	return true;
+}
+
+_SKYNET_KERNEL_DLL_API Net_UInt GetDefaultStackMethod(CCorutineStackDataDefault* pDefaultStack);
 
 
 #endif

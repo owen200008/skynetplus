@@ -3,6 +3,8 @@
 #include "../scbasic/http/httpresponse.h"
 #include "kernel_server.h"
 #include "ccframe/ctx_threadpool.h"
+#include "ccframe/net/ctx_http.h"
+#include "../scbasic/http/httpdefine.h"
 
 using namespace basiclib;
 
@@ -30,7 +32,6 @@ public:
 CKernelServer::CKernelServer()
 {
 	m_L = nullptr;
-	m_pHttpServer = nullptr;
 	m_bRunning = true;
 	m_pCtxThreadPool = nullptr;
 }
@@ -39,8 +40,6 @@ CKernelServer::~CKernelServer()
 {
 	if (m_L)
 		lua_close(m_L);
-	if (m_pHttpServer)
-		m_pHttpServer->Release();
 }
 
 CKernelServer* g_pServer = nullptr;
@@ -89,7 +88,7 @@ void TestShowImportDll(){
 	while (pImportDesc->OriginalFirstThunk != 0)
 	{
 		PSTR pszModName = (PSTR)((PBYTE)pDosHeader + pImportDesc->Name);
-        CCFrameSCBasicLogEventV(nullptr, "LoadModName:%s", pszModName);
+        CCFrameSCBasicLogEventV("LoadModName:%s", pszModName);
 		PIMAGE_THUNK_DATA pOrigin = (PIMAGE_THUNK_DATA)((PBYTE)pDosHeader + pImportDesc->OriginalFirstThunk);
 		PIMAGE_THUNK_DATA pThunk = (PIMAGE_THUNK_DATA)((PBYTE)pDosHeader + pImportDesc->FirstThunk);
 		for (; pOrigin->u1.Ordinal != 0; pOrigin++, pThunk++){
@@ -101,7 +100,7 @@ void TestShowImportDll(){
 				PIMAGE_IMPORT_BY_NAME piibn = (PIMAGE_IMPORT_BY_NAME)((PBYTE)pDosHeader + pOrigin->u1.AddressOfData);
 				pFxName = (LPCSTR)piibn->Name;
 			}
-            CCFrameSCBasicLogEventV(nullptr, "LoadModName:%s Func:%s", pszModName, pFxName);
+            CCFrameSCBasicLogEventV("LoadModName:%s Func:%s", pszModName, pFxName);
 		}
 
 		pImportDesc++;  // Advance to next imported module descriptor
@@ -185,7 +184,6 @@ bool CKernelServer::ReadConfig()
 	}
 
 	m_config.m_daemon = GetEnvString("daemon", NULL);
-	m_config.m_httpAddress = GetEnvString("httpaddress", "0.0.0.0:9080");
 	return true;
 }
 
@@ -220,7 +218,13 @@ void CKernelServer::KernelServerStart(const char* pConfigFileName)
 	SetEnv("ccframekey", config_file);
 
 	m_pCtxThreadPool = new CCtx_KernelThreadPool();
-	CCtx_ThreadPool::CreateThreadPool(m_pCtxThreadPool);
+	CCtx_ThreadPool::CreateThreadPool(m_pCtxThreadPool, [&](CCorutinePlusThreadData* pThreadData)->void* {
+		WorkThreadSelfData* pRet = new WorkThreadSelfData();
+		pRet->Init();
+		return pRet;
+	}, [&](void* pUD)->void {
+		delete (WorkThreadSelfData*)pUD;
+	});
 
 	//初始化动态库
 	basiclib::CBasicString strLoadDllList = GetEnvString("dlllist", "");
@@ -235,24 +239,47 @@ void CKernelServer::KernelServerStart(const char* pConfigFileName)
 	}
 
 	//启动工作线程
-    m_pCtxThreadPool->Init([&](CCorutinePlusThreadData* pThreadData)->void*{
-		WorkThreadSelfData* pRet = new WorkThreadSelfData();
-        pRet->Init();
-		return pRet;
-	}, [&](void* pUD)->void{
-		delete (WorkThreadSelfData*)pUD;
-	});
-
-	//启动http模块
-	RegisterHttp();
-	m_pHttpServer = CHttpSessionServer::CreateHttpServer(0);
-	m_pHttpServer->bind_onhttpask(MakeFastFunction(this, &CKernelServer::OnHttpAsk));
-    m_pHttpServer->SetIpTrust(GetEnvString("httpiptrust", "*"));
-	Net_Int nHttpRet = m_pHttpServer->StartServer(m_config.m_httpAddress.c_str());
-	if (nHttpRet != BASIC_NET_OK){
-		printf("启动http失败%d", nHttpRet);
+    m_pCtxThreadPool->Init();
+	//注册http服务
+	if (m_pCtxThreadPool->GetDefaultHttp() != 0) {
+		const int nSetParam = 1;
+		void* pSetParam[nSetParam] = { this };
+		CreateResumeCoroutineCtx([](CCorutinePlus* pCorutine)->void {
+			int nGetParamCount = 0;
+			void** pGetParam = GetCoroutineCtxParamInfo(pCorutine, nGetParamCount);
+			CKernelServer* pRealCtx = (CKernelServer*)pGetParam[0];
+			//启动http模块
+			CCFrameHttpRegister(0, pRealCtx->m_pCtxThreadPool->GetDefaultHttp(), pCorutine, "reloaddll", [](CCoroutineCtx_Http* pHttpCtx, RefHttpSession pSession, SCBasicDocument& doc, HttpRequest* pRequest, HttpResponse& response, CCorutinePlus* pCorutine, void* pUD)->long {
+				CKernelServer::GetKernelServer()->ReadConfig();
+				//替换动态库
+				basiclib::CBasicString strhttpReplaceList = CKernelServer::GetKernelServer()->GetEnvString("replacedlllist", "");
+				if (!CKernelServer::GetKernelServer()->ReplaceDllList(strhttpReplaceList.c_str())) {
+					char szBuf[4096] = { 0 };
+					sprintf(szBuf, "动态库替换失败(%s)", strhttpReplaceList.c_str());
+					basiclib::BasicLogEventError(szBuf);
+					Http_Json_Number_Set(doc, Http_Json_KeyDefine_RetNum, Http_Json_KeyDefine_RetNum_Success);
+					Http_Json_String_Set(doc, Http_Json_KeyDefine_String, szBuf);
+				}
+				else
+				{
+					Http_Json_Number_Set(doc, Http_Json_KeyDefine_RetNum, Http_Json_KeyDefine_RetNum_Success);
+				}
+				return HTTP_SUCC;
+			}, nullptr, nullptr);
+			CCFrameHttpRegister(0, pRealCtx->m_pCtxThreadPool->GetDefaultHttp(), pCorutine, "listctx", [](CCoroutineCtx_Http* pHttpCtx, RefHttpSession pSession, SCBasicDocument& doc, HttpRequest* pRequest, HttpResponse& response, CCorutinePlus* pCorutine, void* pUD)->long {
+				char szBuf[256] = { 0 };
+				basiclib::CBasicString strRet;
+				CCoroutineCtxHandle::GetInstance()->Foreach([&](CRefCoroutineCtx pCtx)->bool {
+					sprintf(szBuf, "%08x: ClassName(%s) CtxName(%s);", pCtx->GetCtxID(), pCtx->GetCtxClassName(), pCtx->GetCtxName() ? pCtx->GetCtxName() : "");
+					strRet += szBuf;
+					return true;
+				});
+				Http_Json_Number_Set(doc, Http_Json_KeyDefine_RetNum, Http_Json_KeyDefine_RetNum_Success);
+				Http_Json_String_Set(doc, Http_Json_KeyDefine_String, strRet.c_str());
+				return HTTP_SUCC;
+			}, nullptr, nullptr);
+		}, 0, nSetParam, pSetParam);
 	}
-
 	m_pCtxThreadPool->Wait();
 }
 void WorkThreadSelfData::Init(){
