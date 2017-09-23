@@ -20,14 +20,14 @@ protected:
 };
 
 class CKernelLoadDll;
-typedef bool(*KernelLoadCreate)(CKernelLoadDll*, bool bReplace, CInheritGlobalParam*& pInitParam);
+typedef bool(*KernelLoadCreate)(CKernelLoadDll*, CInheritGlobalParam*& pInitParam);
 class CKernelLoadDll : public basiclib::CBasicObject
 {
 public:
 	CKernelLoadDll();
 	virtual ~CKernelLoadDll();
 
-	bool LoadKernelDll(const char* pLoadDll, bool bReplace);
+	bool LoadKernelDll(const char* pLoadDll);
 
 	bool ReplaceDll(CKernelLoadDll& dll);
 
@@ -43,14 +43,18 @@ class _SKYNET_KERNEL_DLL_API CKernelLoadDllMgr : public basiclib::CBasicObject
 public:
 	CKernelLoadDllMgr(){}
 	virtual ~CKernelLoadDllMgr(){}
-	
+
+	//! 加载多个dll
 	bool LoadAllDll(const char* pDlls);
-	int ReplaceDllFunc(const char* pLoadOldDll, const char* pLoadNewDll);
+
+	//! 加载dll
+	bool RegisterDll(const char* pLoadDll);
+
+	//! 判断是否加载过
 	bool IsDllLoaded(const char* pDll);
-	//replaceload 
-	bool ReplaceLoadDll(const char* pDll);
-protected:
-	bool RegisterDll(const char* pLoadDll, bool bReplace = false);
+
+	//! 替换dll
+	int ReplaceDllFunc(const char* pLoadOldDll, const char* pLoadNewDll);
 protected:
 	basiclib::SpinLock		m_lock;
 	typedef basiclib::basic_map<basiclib::CBasicString, CKernelLoadDll*>	MapDllContain;
@@ -117,18 +121,27 @@ protected:
 };
 #pragma warning (pop)
 
+struct _SKYNET_KERNEL_DLL_API InitDllModule{
+	InitDllModule(CCoroutineCtxTemplateCreateFunc pCreate, CCoroutineCtxTemplateReleaseFunc pRelease);
+};
+
 #define CreateTemplateHeader(s) \
 static CCoroutineCtxTemplate* CreateTemplate();\
+static void ReleaseTemplate(CCoroutineCtxTemplate* pTemplate);\
 static CCoroutineCtx* CreateClass(const char* pKeyName = nullptr);\
 static void ReleaseClass(CCoroutineCtx*&)
 
 #define CreateTemplateSrc(s) \
+static InitDllModule g_initDllModule_##s(s::CreateTemplate, s::ReleaseTemplate);\
 CCoroutineCtxTemplate* s::CreateTemplate(){\
 	CCoroutineCtxTemplate* pRet = new CCoroutineCtxTemplate();\
 	pRet->SetTemplateName(GlobalGetClassName(s));\
 	pRet->SetCreateCtx(s::CreateClass);\
 	pRet->SetReleaseCtx(s::ReleaseClass);\
 	return pRet;\
+}\
+void s::ReleaseTemplate(CCoroutineCtxTemplate* pTemplate){\
+	delete pTemplate;\
 }\
 CCoroutineCtx* s::CreateClass(const char* pKeyName){\
     if(pKeyName)\
@@ -139,7 +152,5 @@ void s::ReleaseClass(CCoroutineCtx*& pCtx){\
 	delete pCtx;\
 	pCtx = nullptr;\
 }
-
-void _SKYNET_KERNEL_DLL_API ReleaseTemplate(CCoroutineCtxTemplate* pTemplate);
 
 #endif

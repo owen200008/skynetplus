@@ -63,15 +63,8 @@ void CCoroutineCtx_Log::ReleaseCtx(){
 }
 
 //! 协程里面调用Bussiness消息
-int CCoroutineCtx_Log::DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg){
-    if (nParam != 2){
-        ASSERT(0);
-        //使用老方法写入
-        basiclib::BasicLogEvent(basiclib::DebugLevel_Error, "CCoroutineCtx_Log::DiapathBussinessMsg Param size not 2");
-        return -1;
-    }
-    basiclib::WriteLogDataBuffer* pWriteLog = (basiclib::WriteLogDataBuffer*)pParam[0];
-    int nChannel = *(int*)pParam[1];
+int CCoroutineCtx_Log::DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket){
+	MACRO_DispatchCheckParam2(basiclib::WriteLogDataBuffer* pWriteLog, (basiclib::WriteLogDataBuffer*), int nChannel, *(int*))
     //写日志
     TRACE("LOG%d %s\r\n", nChannel, pWriteLog->m_pText);
     basiclib::BasicWriteByLogDataBuffer(nChannel, *pWriteLog, true);
@@ -84,49 +77,35 @@ void CCoroutineCtx_Log::LogEvent(int nChannel, const char* pszLog){
 	logData.m_lCurTime = time(NULL);
 	logData.m_dwProcessId = basiclib::Basic_GetCurrentProcessId();
 	logData.m_dwThreadId = basiclib::BasicGetCurrentThreadId();
-    const int nSetParam = 3;
-    void* pSetParam[nSetParam] = { this, &logData, &nChannel };
-    CreateResumeCoroutineCtx(CCoroutineCtx_Log::OnLogEventCtx, 0, nSetParam, pSetParam);
-}
-
-void CCoroutineCtx_Log::OnLogEventCtx(CCorutinePlus* pCorutine){
-    bool bFree = false;
-    const int nDefaultSize = 512;
-    char szBuf[nDefaultSize] = { 0 };
-    basiclib::WriteLogDataBuffer bufSelf = *pCorutine->GetResumeParamPoint<basiclib::WriteLogDataBuffer>(0);
-    int nChannel = 0;
-    char* pBuffer = szBuf;
-    int nGetParamCount = 0;
-    void** pGetParam = GetCoroutineCtxParamInfo(pCorutine, nGetParamCount);
-    if (nGetParamCount != 3){
-        ASSERT(0);
-        //使用老方法写入
-        basiclib::BasicLogEvent(basiclib::DebugLevel_Error, "OnLogEventCtx Param size not 3");
-        return;
-    }
-    CCoroutineCtx_Log* pCtx = (CCoroutineCtx_Log*)pGetParam[0];
-    bufSelf = *(basiclib::WriteLogDataBuffer*)pGetParam[1];
-    nChannel = *(int*)pGetParam[2];
-
-    int nLength = strlen(bufSelf.m_pText);
-    if (nLength > nDefaultSize){
-        bFree = true;
-        pBuffer = (char*)basiclib::BasicAllocate(nLength);
-        memcpy(pBuffer, bufSelf.m_pText, nLength);
-    }
-    else{
-        memcpy(szBuf, bufSelf.m_pText, nLength);
-    }
-    bufSelf.InitLogData(pBuffer);
-    const int nSetParam = 2;
-    void* pSetParam[nSetParam] = { &bufSelf, &nChannel };
-    //因为不可能会有reply所以可以设置为nullptr
-    void* pReply = nullptr;
-    int nRetValue = 0;
-    WaitExeCoroutineToCtxBussiness(pCorutine, 0, pCtx->GetCtxID(), 0, nSetParam, pSetParam, pReply, nRetValue);
-    if (bFree){
-        basiclib::BasicDeallocate(pBuffer);
-    }
+	Ctx_CreateCoroutine(0, [](CCorutinePlus* pCorutine){
+		bool bFree = false;
+		const int nDefaultSize = 512;
+		char szBuf[nDefaultSize] = { 0 };
+		char* pBuffer = szBuf;
+		CCoroutineCtx_Log* pCtx = pCorutine->GetParamPoint<CCoroutineCtx_Log>(0);
+		basiclib::WriteLogDataBuffer bufSelf = *pCorutine->GetParamPoint<basiclib::WriteLogDataBuffer>(1);
+		int nChannel = pCorutine->GetParam<int>(2);
+		int nLength = strlen(bufSelf.m_pText);
+		if(nLength > nDefaultSize){
+			bFree = true;
+			pBuffer = (char*)basiclib::BasicAllocate(nLength);
+			memcpy(pBuffer, bufSelf.m_pText, nLength);
+		}
+		else{
+			memcpy(szBuf, bufSelf.m_pText, nLength);
+		}
+		bufSelf.InitLogData(pBuffer);
+		const int nSetParam = 2;
+		void* pSetParam[nSetParam] = { &bufSelf, &nChannel };
+		//因为不可能会有reply所以可以设置为nullptr
+		void* pReply = nullptr;
+		int nRetValue = 0;
+		MACRO_ExeToCtxParam2(pCorutine, 0, pCtx->GetCtxID(), 0, &bufSelf, &nChannel, nullptr,
+							 );
+		if(bFree){
+			basiclib::BasicDeallocate(pBuffer);
+		}
+	}, this, &logData, &nChannel);
 }
 
 void CCoroutineCtx_Log::OnTimerBasicLog(CCoroutineCtx* pCtx){

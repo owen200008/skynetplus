@@ -4,17 +4,13 @@
 
 CreateTemplateSrc(CCtx_ThreadState)
 
-CCtx_ThreadState::CCtx_ThreadState(const char* pKeyName, const char* pClassName) : CCoroutineCtx(pKeyName, pClassName)
-{
+CCtx_ThreadState::CCtx_ThreadState(const char* pKeyName, const char* pClassName) : CCoroutineCtx(pKeyName, pClassName){
 }
 
-CCtx_ThreadState::~CCtx_ThreadState()
-{
-
+CCtx_ThreadState::~CCtx_ThreadState(){
 }
 
-int CCtx_ThreadState::InitCtx(CMQMgr* pMQMgr, const std::function<const char*(InitGetParamType, const char* pKey, const char* pDefault)>& func)
-{
+int CCtx_ThreadState::InitCtx(CMQMgr* pMQMgr, const std::function<const char*(InitGetParamType, const char* pKey, const char* pDefault)>& func){
     int nRet = CCoroutineCtx::InitCtx(pMQMgr, func);
     if (nRet != 0)
         return nRet;
@@ -30,8 +26,7 @@ void CCtx_ThreadState::ReleaseCtx(){
 }
 
 //业务类, 全部使用静态函数
-void CCtx_ThreadState::OnTimerShowThreadState(CCoroutineCtx* pCtx)
-{
+void CCtx_ThreadState::OnTimerShowThreadState(CCoroutineCtx* pCtx){
 	CCorutinePlusThreadData* pCurrentData = CCtx_ThreadPool::GetThreadPool()->GetOrCreateSelfThreadData();
     CCFrameSCBasicLogEventV("ThreadID(%08d): CorutinePool(%d/%d Stack(%d/%d))",
 		pCurrentData->GetThreadID(),

@@ -30,45 +30,37 @@ public:
     virtual void ReleaseCtx();
 
     //! 协程里面调用Bussiness消息
-    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg);
+    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket);
 
-    //! 判断是否连接，如果没有连接发起连接
-    void CheckConnect();
-    //! 错误关闭函数
-    void ErrorClose();
-    //! 判断是否已经认证成功
-    bool IsTransmit();
     ////////////////////////////////////////////////////////////////////////////////////////
     //业务类, 全部使用静态函数, 这样可以保证动态库函数可以替换,做到动态更新
     static void OnTimer(CCoroutineCtx* pCtx);
 protected:
     ////////////////////DispathBussinessMsg
     //! 发送请求
-    long DispathBussinessMsg_0_Exec(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket);
-    long ExecReply(CCorutinePlus* pCorutine, MysqlReplyExec* pRetPacket);
+    int DispathBussinessMsg_0_Exec(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket);
+	int ExecReply(CCorutinePlus* pCorutine, MysqlReplyExec* pRetPacket);
 
-    long DispathBussinessMsg_1_Query(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket);
-    long QueryReply(CCorutinePlus* pCorutine, MysqlReplyQuery* pRetPacket);
+	int DispathBussinessMsg_1_Query(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket);
+	int QueryReply(CCorutinePlus* pCorutine, MysqlReplyQuery* pRetPacket);
 
-    long DispathBussinessMsg_2_Ping(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket);
-    long DispathBussinessMsg_3_Multi(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket);
+	int DispathBussinessMsg_2_Ping(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket);
+	int DispathBussinessMsg_3_Multi(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket);
     //发送执行sql
     void SendRequestQuery(const char* pSQL);
     void SendRequestPing();
     //获取一个packet
     int GetPacketYield(CCorutinePlus* pCorutine, const std::function<int(unsigned char* pPacket, int nLength)>& func);
 protected:
-    int32_t OnConnect(basiclib::CBasicSessionNetClient* pClient, uint32_t nCode);
-    int32_t OnReceiveVerify(basiclib::CBasicSessionNetClient* pNotify, Net_UInt dwNetCode, Net_Int cbData, const char* pszData);
-    int32_t OnReceiveVerifyResult(basiclib::CBasicSessionNetClient* pNotify, Net_UInt dwNetCode, Net_Int cbData, const char* pszData);
-    int32_t OnReceive(basiclib::CBasicSessionNetClient* pNotify, Net_UInt dwNetCode, Net_Int cbData, const char* pszData);
-    int32_t OnDisconnect(basiclib::CBasicSessionNetClient* pNotify, Net_UInt dwNetCode);
-    int32_t OnIdle(basiclib::CBasicSessionNetClient*, uint32_t);
+    int32_t OnConnect(basiclib::CBasicSessionNetNotify* pClient, uint32_t nCode);
+    int32_t OnReceiveVerify(basiclib::CBasicSessionNetNotify* pNotify, Net_UInt dwNetCode, Net_Int cbData, const char* pszData);
+    int32_t OnReceiveVerifyResult(basiclib::CBasicSessionNetNotify* pNotify, Net_UInt dwNetCode, Net_Int cbData, const char* pszData);
+    int32_t OnReceive(basiclib::CBasicSessionNetNotify* pNotify, Net_UInt dwNetCode, Net_Int cbData, const char* pszData);
+    int32_t OnDisconnect(basiclib::CBasicSessionNetNotify* pNotify, Net_UInt dwNetCode);
+    int32_t OnIdle(basiclib::CBasicSessionNetNotify*, uint32_t);
 protected:
     //! 创建协程
     static void Corutine_OnIdleSendPing(CCorutinePlus* pCorutine);
-    //! 创建协程
-    static void Corutine_OnReceiveData(CCorutinePlus* pCorutine);
 protected:
     static void Func_ReceiveMysqlConnect(CCoroutineCtx* pCtx, ctx_message* pMsg);
     static void Func_ReceiveMysqlDisconnect(CCoroutineCtx* pCtx, ctx_message* pMsg);
@@ -104,6 +96,7 @@ protected:
     basiclib::CBasicString                              m_strServerVersion;
     uint32_t                                            m_nThread_id;
     Net_UInt					                        m_maxPacketSize;
+	MsgQueueRequestStoreData							m_vtWaitRequest;		//等待执行的
 };
 
 //实现全局安全的函数封装类似select和query

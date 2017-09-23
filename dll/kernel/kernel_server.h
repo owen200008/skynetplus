@@ -22,19 +22,6 @@ struct ServerModuleConfig
 	}
 };
 
-struct WorkThreadSelfData{
-    lua_State*					m_L;
-	//selene state必须保存，不然注册的会析构
-    WorkThreadSelfData(){
-        m_L = nullptr;
-    }
-    ~WorkThreadSelfData(){
-        if (m_L)
-            lua_close(m_L);
-    }
-    void Init();
-};
-
 #pragma warning (push)
 #pragma warning (disable: 4251)
 #pragma warning (disable: 4275)

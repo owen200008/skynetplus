@@ -9,23 +9,6 @@
 using namespace basiclib;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-class CCtx_KernelThreadPool : public CCtx_ThreadPool
-{
-public:
-	CCtx_KernelThreadPool(){
-
-	}
-	virtual ~CCtx_KernelThreadPool(){
-	}
-	//必须实现的虚函数
-	virtual const char* GetCtxInitString(InitGetParamType nType, const char* pParam, const char* pDefault){
-		switch (nType){
-		case InitGetParamType_Config:
-			return CKernelServer::GetKernelServer()->GetEnvString(pParam, pDefault);
-		}
-		return nullptr;
-	}
-};
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #define Config_Ini_MainSection "Main"
 
@@ -118,8 +101,7 @@ int sigign()
 #endif
 
 
-static void _init_env(lua_State *L)
-{
+static void _init_env(lua_State *L){
 	lua_pushnil(L);  /* first key */
 	while (lua_next(L, -2) != 0) {
 		int keyt = lua_type(L, -2);
@@ -145,8 +127,7 @@ static void _init_env(lua_State *L)
 	lua_pop(L, 1);
 }
 
-bool CKernelServer::ReadConfig()
-{
+bool CKernelServer::ReadConfig(){
 	lua_State *L = luaL_newstate();
     luaL_openlibs(L);   // link lua lib
 
@@ -187,8 +168,7 @@ bool CKernelServer::ReadConfig()
 	return true;
 }
 
-void CKernelServer::KernelServerStart(const char* pConfigFileName)
-{
+void CKernelServer::KernelServerStart(const char* pConfigFileName){
     //日志由框架日志ctx管理
     basiclib::InitBasicLog(false);
 
@@ -217,14 +197,14 @@ void CKernelServer::KernelServerStart(const char* pConfigFileName)
 	//设置ccframekey
 	SetEnv("ccframekey", config_file);
 
-	m_pCtxThreadPool = new CCtx_KernelThreadPool();
-	CCtx_ThreadPool::CreateThreadPool(m_pCtxThreadPool, [&](CCorutinePlusThreadData* pThreadData)->void* {
-		WorkThreadSelfData* pRet = new WorkThreadSelfData();
-		pRet->Init();
-		return pRet;
-	}, [&](void* pUD)->void {
-		delete (WorkThreadSelfData*)pUD;
-	});
+	m_pCtxThreadPool = CCtx_ThreadPool::GetThreadPoolOrCreate();
+	m_pCtxThreadPool->m_defaultFuncGetConfig = [&](InitGetParamType nType, const char* pParam, const char* pDefault)->const char*{
+		switch(nType){
+		case InitGetParamType_Config:
+			return CKernelServer::GetKernelServer()->GetEnvString(pParam, pDefault);
+		}
+		return nullptr;
+	};
 
 	//初始化动态库
 	basiclib::CBasicString strLoadDllList = GetEnvString("dlllist", "");
@@ -242,12 +222,8 @@ void CKernelServer::KernelServerStart(const char* pConfigFileName)
     m_pCtxThreadPool->Init();
 	//注册http服务
 	if (m_pCtxThreadPool->GetDefaultHttp() != 0) {
-		const int nSetParam = 1;
-		void* pSetParam[nSetParam] = { this };
-		CreateResumeCoroutineCtx([](CCorutinePlus* pCorutine)->void {
-			int nGetParamCount = 0;
-			void** pGetParam = GetCoroutineCtxParamInfo(pCorutine, nGetParamCount);
-			CKernelServer* pRealCtx = (CKernelServer*)pGetParam[0];
+		Ctx_CreateCoroutine(0, [](CCorutinePlus* pCorutine){
+			CKernelServer* pRealCtx = pCorutine->GetParamPoint<CKernelServer>(0);
 			//启动http模块
 			CCFrameHttpRegister(0, pRealCtx->m_pCtxThreadPool->GetDefaultHttp(), pCorutine, "reloaddll", [](CCoroutineCtx_Http* pHttpCtx, RefHttpSession pSession, SCBasicDocument& doc, HttpRequest* pRequest, HttpResponse& response, CCorutinePlus* pCorutine, void* pUD)->long {
 				CKernelServer::GetKernelServer()->ReadConfig();
@@ -278,26 +254,17 @@ void CKernelServer::KernelServerStart(const char* pConfigFileName)
 				Http_Json_String_Set(doc, Http_Json_KeyDefine_String, strRet.c_str());
 				return HTTP_SUCC;
 			}, nullptr, nullptr);
-		}, 0, nSetParam, pSetParam);
+		}, this);
 	}
 	m_pCtxThreadPool->Wait();
 }
-void WorkThreadSelfData::Init(){
-    if (m_L == nullptr){
-        lua_State *L = luaL_newstate();
-        luaL_openlibs(L);   // link lua lib
-        m_L = L;
-    }
-}
 
 //先初始化后才能取到
-CKernelServer* CKernelServer::GetKernelServer()
-{
+CKernelServer* CKernelServer::GetKernelServer(){
 	return g_pServer;
 }
 
-bool CKernelServer::ReplaceDllList(const char* pReplaceDllList)
-{
+bool CKernelServer::ReplaceDllList(const char* pReplaceDllList){
 	basiclib::CBasicKey2Value keyToVal;
 	keyToVal.ParseText(pReplaceDllList, ">|");
 	bool bSuccess = true;
@@ -308,13 +275,11 @@ bool CKernelServer::ReplaceDllList(const char* pReplaceDllList)
 			return;
 		}
 		//加载value
-		m_mgtDllFile.ReplaceLoadDll(pValue);
+		m_mgtDllFile.RegisterDll(pValue);
 
 		int nRet = m_mgtDllFile.ReplaceDllFunc(pKey, pValue);
-		if (nRet != 0)
-		{
-			switch (nRet)
-			{
+		if (nRet != 0){
+			switch (nRet){
 			case -1:
 				basiclib::BasicLogEventErrorV("ReplaceDllList失败：%s没有加载(%s -> %s)", pKey, pKey, pValue);
 				break;
@@ -334,8 +299,7 @@ bool CKernelServer::ReplaceDllList(const char* pReplaceDllList)
 	return bSuccess;
 }
 
-int CKernelServer::GetEnv(const char* key, int opt)
-{
+int CKernelServer::GetEnv(const char* key, int opt){
 	const char* pKey = GetEnv(key);
     if (pKey == nullptr)
 	{
@@ -344,8 +308,7 @@ int CKernelServer::GetEnv(const char* key, int opt)
     return strtol(pKey, NULL, 10);
 }
 
-const char* CKernelServer::GetEnvString(const char* key, const char* opt)
-{
+const char* CKernelServer::GetEnvString(const char* key, const char* opt){
 	const char* str = GetEnv(key);
     if (str == nullptr){
 		return opt;

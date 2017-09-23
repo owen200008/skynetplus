@@ -7,7 +7,7 @@
 #pragma warning (push)
 #pragma warning (disable: 4251)
 #pragma warning (disable: 4275)
-
+class CCorutinePlus;
 struct _SKYNET_KERNEL_DLL_API KernelRequestStoreData{
     CCorutinePlus*      m_pCorutine;
     time_t              m_tmRequestTime;

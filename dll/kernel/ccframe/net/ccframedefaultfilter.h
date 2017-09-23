@@ -2,7 +2,6 @@
 #define SKYNETPLUS_CCFRAMEDEFAULTFILTER_H
 
 #include <basic.h>
-#include "../scbasic/net/net.h"
 #include "../../kernel_head.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,6 +29,9 @@ protected:
 //设置最大的缓存包大小
 #define CCFRAMENETPROTOCAL_PACKET_SIZE_CLIENT		0xFFFFFF		//最大设置成16M的数据
 
+#pragma warning (push)
+#pragma warning (disable: 4251)
+#pragma warning (disable: 4275)
 class _SKYNET_KERNEL_DLL_API CCCFrameDefaultFilter : public basiclib::CBasicPreSend
 {
 public:
@@ -38,11 +40,11 @@ public:
 
     /*\brief 过滤收到的数据 */
     // 过滤生成的数据放入buf
-    virtual Net_Int OnPreReceive(const char *pszData, Net_Int cbData, basiclib::CBasicBitstream& buf, basiclib::CBasicSessionNetClient* pNetSession);
+	virtual int32_t OnPreReceive(const char *pszData, int32_t cbData, basiclib::CBasicBitstream& buf, basiclib::CBasicSessionNetNotify* pNetSession);
 
     /*\brief 过滤发送的数据 */
     // 过滤生成的数据放入buf
-    virtual Net_Int OnPreSend(const char *pszData, Net_Int cbData, Net_UInt dwFlag, basiclib::SendDataToSendThread& buf);
+	virtual int32_t OnPreSend(const char *pszData, int32_t cbData, uint32_t dwFlag, basiclib::SendBufferCacheMgr& sendBuf);
 
     /*\brief 构造新的实例 */
     // 用于Accept
@@ -55,5 +57,6 @@ protected:
     //最大允许的数据长度
     DWORD				            m_dwLength;
 };
+#pragma warning (pop)
 
 #endif

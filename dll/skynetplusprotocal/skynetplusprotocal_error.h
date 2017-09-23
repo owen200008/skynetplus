@@ -3,6 +3,7 @@
 
 //!错误的定义系统保留段0xF0000000-0xFFFFFFFF
 #define SPROTO_ERRORID_SKYNETPLUS_Global_ParseError         0xF0000000          //传递包解析错误
+#define SPROTO_ERRORID_SKYNETPLUS_Global_NoRegister			0xF0000001			//还没注册成功
 
 #define SPROTO_ERRORID_SKYNETPLUS_REGISTER_METHODIDERR      0xF0001001          //注册参数错误
 #define SPROTO_ERRORID_SKYNETPLUS_REGISTER_KEYEXIST         0xF0001002          //key已经存在

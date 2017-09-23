@@ -1,43 +1,33 @@
 #include "dllmodule.h"
+#include "ctx_threadpool.h"
 #include "log/ctx_log.h"
 
-CInheritGlobalParam::CInheritGlobalParam(const char* pVersion)
-{
+CInheritGlobalParam::CInheritGlobalParam(const char* pVersion){
 	m_strVersion = pVersion;
 }
 
-CInheritGlobalParam::~CInheritGlobalParam()
-{
-
+CInheritGlobalParam::~CInheritGlobalParam(){
 }
 ////////////////////////////////////////////////////////////////////////////////////
-CKernelLoadDll::CKernelLoadDll()
-{
+CKernelLoadDll::CKernelLoadDll(){
 	m_pDllGlobalParam = nullptr;
 }
 
-CKernelLoadDll::~CKernelLoadDll()
-{
-
+CKernelLoadDll::~CKernelLoadDll(){
 }
 
-bool CKernelLoadDll::LoadKernelDll(const char* pLoadDll, bool bReplace)
-{
-	if (m_dll.LoadLibrary(pLoadDll) != 0)
-	{
+bool CKernelLoadDll::LoadKernelDll(const char* pLoadDll){
+	if (m_dll.LoadLibrary(pLoadDll) != 0){
 		CCFrameSCBasicLogEventErrorV("加载动态库失败%s", pLoadDll);
 		return false;
 	}
-
 	KernelLoadCreate pCreate = (KernelLoadCreate)m_dll.GetProcAddress("InitForKernel");
-	if (pCreate)
-	{
-		return pCreate(this, bReplace, m_pDllGlobalParam);
+	if (pCreate){
+		return pCreate(this, m_pDllGlobalParam);
 	}
 	return true;
 }
-bool CKernelLoadDll::ReplaceDll(CKernelLoadDll& dll)
-{
+bool CKernelLoadDll::ReplaceDll(CKernelLoadDll& dll){
 	bool bRet = m_dll.ReplaceDll(dll.GetDll(), [](const char* pLog)->void{
 		CCFrameSCBasicLogEvent(pLog);
 	});
@@ -49,41 +39,31 @@ bool CKernelLoadDll::ReplaceDll(CKernelLoadDll& dll)
 	return true;
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool CKernelLoadDllMgr::LoadAllDll(const char* pDlls)
-{
+bool CKernelLoadDllMgr::LoadAllDll(const char* pDlls){
 	basiclib::CBasicStringArray ayItems;
 	basiclib::BasicSpliteString(pDlls, ';', basiclib::IntoContainer_s<basiclib::CBasicStringArray>(ayItems));
 	int nSize = ayItems.GetSize();
-	for (int i = 0; i < nSize; i++)
-	{
+	for (int i = 0; i < nSize; i++){
 		if (!RegisterDll(ayItems[i].c_str()))
 			return false;
 	}
 	return true;
 }
 
-bool CKernelLoadDllMgr::ReplaceLoadDll(const char* pLoadDll)
-{
-	return RegisterDll(pLoadDll, true);
-}
-
-bool CKernelLoadDllMgr::RegisterDll(const char* pLoadDll, bool bReplace)
-{
+bool CKernelLoadDllMgr::RegisterDll(const char* pLoadDll){
 	basiclib::CSpinLockFunc lock(&m_lock, TRUE);
 	//已经加载不需要重复加载
 	if (m_mapDll.find(pLoadDll) != m_mapDll.end())
 		return true;
 	CKernelLoadDll* pDll = new CKernelLoadDll();
-	if (!pDll->LoadKernelDll(pLoadDll, bReplace))
-	{
+	if (!pDll->LoadKernelDll(pLoadDll)){
 		delete pDll;
 		return false;
 	}
 	m_mapDll[pLoadDll] = pDll;
 	return true;
 }
-int CKernelLoadDllMgr::ReplaceDllFunc(const char* pLoadOldDll, const char* pLoadNewDll)
-{
+int CKernelLoadDllMgr::ReplaceDllFunc(const char* pLoadOldDll, const char* pLoadNewDll){
 	if (pLoadOldDll == nullptr || pLoadNewDll == nullptr)
 		return -3;
 	basiclib::CSpinLockFunc lock(&m_lock, TRUE);
@@ -93,10 +73,9 @@ int CKernelLoadDllMgr::ReplaceDllFunc(const char* pLoadOldDll, const char* pLoad
 		return -2;
 	return m_mapDll[pLoadOldDll]->ReplaceDll(*m_mapDll[pLoadNewDll]) ? 0 : -4;
 }
-bool CKernelLoadDllMgr::IsDllLoaded(const char* pDll)
-{
-	if (pDll == nullptr)
-	{
+
+bool CKernelLoadDllMgr::IsDllLoaded(const char* pDll){
+	if (pDll == nullptr){
 		return false;
 	}
 	if (m_mapDll.find(pDll) == m_mapDll.end())
@@ -104,40 +83,30 @@ bool CKernelLoadDllMgr::IsDllLoaded(const char* pDll)
 	return true;
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
-CCoroutineCtxTemplate::CCoroutineCtxTemplate()
-{
+CCoroutineCtxTemplate::CCoroutineCtxTemplate(){
 }
-CCoroutineCtxTemplate::~CCoroutineCtxTemplate()
-{
-
+CCoroutineCtxTemplate::~CCoroutineCtxTemplate(){
 }
 
-void CCoroutineCtxTemplate::SetCreateCtx(KernelCtxCreate pCreate)
-{
+void CCoroutineCtxTemplate::SetCreateCtx(KernelCtxCreate pCreate){
 	m_create = pCreate;
 }
-void CCoroutineCtxTemplate::SetReleaseCtx(KernelCtxRelease pRelease)
-{
+void CCoroutineCtxTemplate::SetReleaseCtx(KernelCtxRelease pRelease){
 	m_release = pRelease;
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-CDllRegisterCtxTemplateMgr::CDllRegisterCtxTemplateMgr()
-{
-
+CDllRegisterCtxTemplateMgr::CDllRegisterCtxTemplateMgr(){
 }
 
-CDllRegisterCtxTemplateMgr::~CDllRegisterCtxTemplateMgr()
-{
+CDllRegisterCtxTemplateMgr::~CDllRegisterCtxTemplateMgr(){
 	basiclib::CSpinLockFunc lock(&m_lock, TRUE);
 	m_queue.Drop_Queue([](CCoroutineCtxTemplateMessage* pTemplateMsg)->void{
 		pTemplateMsg->Release();
 	});
 }
 
-bool CDllRegisterCtxTemplateMgr::Register(CCoroutineCtxTemplateCreateFunc pCreate, CCoroutineCtxTemplateReleaseFunc pRelease)
-{
-	if (nullptr == pCreate || nullptr == pRelease)
-	{
+bool CDllRegisterCtxTemplateMgr::Register(CCoroutineCtxTemplateCreateFunc pCreate, CCoroutineCtxTemplateReleaseFunc pRelease){
+	if (nullptr == pCreate || nullptr == pRelease){
 		CCFrameSCBasicLogEventError("注册上下文失败创建和释放函数是空");
 #ifdef _DEBUG
 		stacktrace::call_stack stack(0);
@@ -171,12 +140,10 @@ bool CDllRegisterCtxTemplateMgr::Register(CCoroutineCtxTemplateCreateFunc pCreat
 	return true;
 }
 
-CCoroutineCtxTemplate* CDllRegisterCtxTemplateMgr::GetCtxTemplate(const char* pName)
-{
+CCoroutineCtxTemplate* CDllRegisterCtxTemplateMgr::GetCtxTemplate(const char* pName){
 	basiclib::CSpinLockFunc lock(&m_lock, TRUE);
 	MapTemplateMgr::iterator iter = m_mgrTemplate.find(pName);
-	if (iter != m_mgrTemplate.end())
-	{
+	if (iter != m_mgrTemplate.end()){
 		return iter->second;
 	}
 	return nullptr;
@@ -191,10 +158,10 @@ void CCoroutineCtxTemplateMessage::Release(){
 	}
 }
 ///////////////////////////////////////////////////////////////////////////////////////////
-void ReleaseTemplate(CCoroutineCtxTemplate* pTemplate){
-	delete pTemplate;
+InitDllModule::InitDllModule(CCoroutineCtxTemplateCreateFunc pCreate, CCoroutineCtxTemplateReleaseFunc pRelease){
+	CDllRegisterCtxTemplateMgr& ctxInterface = CCtx_ThreadPool::GetThreadPoolOrCreate()->GetCtxTemplateRegister();
+	ctxInterface.Register(pCreate, pRelease);
 }
-
 
 
 

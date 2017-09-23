@@ -18,9 +18,10 @@ CCoroutineCtxHandle::CCoroutineCtxHandle()
     m_releaseHandleID.reserve(0xffff);
 }
 
-CCoroutineCtxHandle::~CCoroutineCtxHandle()
-{
-    //m_pClient应该析构，不过也不知道可以在什么时候析构
+CCoroutineCtxHandle::~CCoroutineCtxHandle(){
+    //在自己析构前必须清空
+	m_mapNameToCtx.clear();
+	m_mapIDToCtx.clear();
 }
 
 //! 初始化函数
@@ -66,25 +67,13 @@ uint32_t CCoroutineCtxHandle::Register(CCoroutineCtx* pCtx){
     }
     if (bRegisterGlobal){
         if (m_pClient){
-            const int nSetParam = 3;
-            void* pSetParam[nSetParam] = { (void*)pCtxName, &uHandleID, m_pClient };
-            CreateResumeCoroutineCtx([](CCorutinePlus* pCorutine)->void{
-                {
-                    int nGetParamCount = 0;
-                    void** pGetParam = GetCoroutineCtxParamInfo(pCorutine, nGetParamCount);
-                    IsErrorHapper(nGetParamCount == 3, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nGetParamCount); return);
-                    const char* pCtxName = (const char*)pGetParam[0];
-                    uint32_t uCtxID = *(uint32_t*)pGetParam[1];
-                    CCoroutineCtx_NetClientServerCommu* pClient = (CCoroutineCtx_NetClientServerCommu*)pGetParam[2];
-                    const int nSetParam = 2;
-                    void* pSetParam[nSetParam] = { pGetParam[0], &uCtxID };
-                    int nRetValue = 0;
-                    if (!WaitExeCoroutineToCtxBussiness(pCorutine, 0, pClient->GetCtxID(), DEFINEDISPATCH_CORUTINE_NetClient_CreateMap, nSetParam, pSetParam, nullptr, nRetValue)){
-                        CCFrameSCBasicLogEventErrorV("%s(%s:%d) WaitExeCoroutineToCtxBussiness FAIL ret(%d)", __FUNCTION__, __FILE__, __LINE__, nRetValue);
-						ASSERT(0);
-                    }
-                }
-            }, 0, nSetParam, pSetParam);
+			Ctx_CreateCoroutine(0, [](CCorutinePlus* pCorutine){
+				const char* pCtxName = pCorutine->GetParamPoint<const char>(0);
+                uint32_t uCtxID = pCorutine->GetParam<uint32_t>(1);
+				CCoroutineCtx_NetClientServerCommu* pClient = pCorutine->GetParamPoint<CCoroutineCtx_NetClientServerCommu>(2);
+				MACRO_ExeToCtxParam2(pCorutine, 0, pClient->GetCtxID(), DEFINEDISPATCH_CORUTINE_NetClient_CreateMap, (void*)pCtxName, &uCtxID, nullptr,
+									 return);
+            }, (void*)pCtxName, &uHandleID, m_pClient);
         }
     }
 	return uHandleID;
@@ -118,25 +107,12 @@ int CCoroutineCtxHandle::UnRegister(uint32_t uHandleID)
 		lock.UnLockWrite();
         if (bDeleteGlobal){
             if (m_pClient){
-                const int nSetParam = 2;
-                void* pSetParam[nSetParam] = { (void*)pCtxName, m_pClient };
-                CreateResumeCoroutineCtx([](CCorutinePlus* pCorutine)->void{
-                    {
-                        int nGetParamCount = 0;
-                        void** pGetParam = GetCoroutineCtxParamInfo(pCorutine, nGetParamCount);
-                        IsErrorHapper(nGetParamCount == 2, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nGetParamCount); return);
-                        const char* pCtxName = (const char*)pGetParam[0];
-                        CCoroutineCtx_NetClientServerCommu* pClient = (CCoroutineCtx_NetClientServerCommu*)pGetParam[2];
-
-                        const int nSetParam = 1;
-                        void* pSetParam[nSetParam] = { pGetParam[1] };
-                        int nRetValue = 0;
-                        if (!WaitExeCoroutineToCtxBussiness(pCorutine, 0, pClient->GetCtxID(), DEFINEDISPATCH_CORUTINE_NetClient_DeleteMap, nSetParam, pSetParam, nullptr, nRetValue)){
-                            CCFrameSCBasicLogEventErrorV("%s(%s:%d) WaitExeCoroutineToCtxBussiness FAIL ret(%d)", __FUNCTION__, __FILE__, __LINE__, nRetValue);
-							ASSERT(0);
-                        }
-                    }
-                }, 0, nSetParam, pSetParam);
+				Ctx_CreateCoroutine(0, [](CCorutinePlus* pCorutine){
+					const char* pCtxName = pCorutine->GetParamPoint<const char>(0);
+					CCoroutineCtx_NetClientServerCommu* pClient = pCorutine->GetParamPoint<CCoroutineCtx_NetClientServerCommu>(1);
+					MACRO_ExeToCtxParam1(pCorutine, 0, pClient->GetCtxID(), DEFINEDISPATCH_CORUTINE_NetClient_DeleteMap, (void*)pCtxName, nullptr, 
+										 ASSERT(0));
+                }, (void*)pCtxName, m_pClient);
             }
         }
 		ret = 1;
@@ -156,18 +132,12 @@ uint32_t CCoroutineCtxHandle::GetCtxIDByName(const char* pName, CCorutinePlus* p
 
     //去全局查找
     if (m_pClient && pCorutine){
-        const int nSetParam = 1;
-        void* pSetParam[nSetParam] = { (void*)pName };
-        int nRetValue = 0;
-        SkynetPlusGetCtxIDByNameResponse response;
-        if (!WaitExeCoroutineToCtxBussiness(pCorutine, nResCtxID, m_pClient->GetCtxID(), DEFINEDISPATCH_CORUTINE_NetClient_GetMap, nSetParam, pSetParam, &response, nRetValue)){
-            ASSERT(0);
-            CCFrameSCBasicLogEventErrorV("%s(%s:%d) WaitExeCoroutineToCtxBussiness FAIL ret(%d)", __FUNCTION__, __FILE__, __LINE__, nRetValue);
-        }
+		SkynetPlusGetCtxIDByNameResponse response;
+		MACRO_ExeToCtxParam1(pCorutine, nResCtxID, m_pClient->GetCtxID(), DEFINEDISPATCH_CORUTINE_NetClient_GetMap, (void*)pName, &response,
+							 return 0);
         if (response.m_nError == 0)
             return response.m_nCtxID;
     }
-
     return 0;
 }
 

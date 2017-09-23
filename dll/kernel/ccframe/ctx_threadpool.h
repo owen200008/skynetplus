@@ -17,39 +17,15 @@
 #pragma warning (push)
 #pragma warning (disable: 4251)
 #pragma warning (disable: 4275)
-//call in the thread create
-class basiclib::CBasicThreadTLS;
-class CCtx_ThreadPool;
-class CCFrameServer_Frame;
 
-class _SKYNET_KERNEL_DLL_API CCtx_CorutinePlusThreadData : public CCorutinePlusThreadData
-{
-public:
-    CCtx_CorutinePlusThreadData(CCtx_ThreadPool* pThreadPool);
-    virtual ~CCtx_CorutinePlusThreadData();
-
-	//执行
-	void ExecThreadOnWork();
-public:
-	CCtx_ThreadPool*									m_pThreadPool;
-	//全局消息消费者token
-	moodycamel::ConsumerToken							m_globalCToken;
-
-	CMQMgr												m_threadMgrQueue;
-    moodycamel::ConsumerToken							m_threadCToken;
-};
-
-typedef fastdelegate::FastDelegate0<void*> OnCreateUDData;
 class _SKYNET_KERNEL_DLL_API CCtx_ThreadPool : public basiclib::CBasicObject
 {
 public:
-	static void CreateThreadPool(CCtx_ThreadPool* pPool, const std::function<void*(CCorutinePlusThreadData*)>& pCreateFunc, const std::function<void(void*)>& pReleaseParamFunc);
+	static CCtx_ThreadPool* GetThreadPoolOrCreate();
 	static CCtx_ThreadPool* GetThreadPool();
 	static CCorutinePlusThreadData* GetOrCreateSelfThreadData();
-
 public:
-	//必须实现的虚函数
-	virtual const char* GetCtxInitString(InitGetParamType nType, const char* pParam, const char* pDefault) = 0;
+	std::function<const char*(InitGetParamType, const char* pKey, const char* pDefault)> m_defaultFuncGetConfig;
 public:
 	CCtx_ThreadPool();
 	virtual ~CCtx_ThreadPool();
@@ -62,8 +38,8 @@ public:
 	void SetClose();
 	//获取默认的dll
 	uint32_t GetDefaultHttp() { return m_nDefaultHttpCtxID; }
+	const std::function<const char*(InitGetParamType, const char* pKey, const char* pDefault)>& GetDefaultConfigFunc(){ return m_defaultFuncGetConfig; }
 public:
-	basiclib::CBasicThreadTLS& GetTLS(){ return m_threadIndexTLS; }
     CBasicOnTimer& GetOnTimerModule(){ return m_ontimerModule; }
 	CMQMgr& GetGlobalMQMgr(){ return m_globalMQMgrModule; }
 	CXKRSAManager& GetRSAMgr() { return m_rsaMgr; }
@@ -78,11 +54,10 @@ protected:
 	
 	friend THREAD_RETURN ThreadOnMonitor(void*);
 	void ExecThreadOnMonitor();
+	friend void ExecThreadOnWork(CCtx_ThreadPool* pThreadPool);
 protected:
-    std::function<const char*(InitGetParamType, const char* pKey, const char* pDefault)> m_defaultFuncGetConfig;
 	bool														m_bSetClose;
 	bool														m_bRunning;
-	basiclib::CBasicThreadTLS									m_threadIndexTLS;
 	CBasicOnTimer												m_ontimerModule;			//执行ontimer callback
 	basiclib::basic_vector<HANDLE>								m_vtHandle;
 	HANDLE														m_hMonitor;
@@ -90,8 +65,6 @@ protected:
 	CMQMgr														m_globalMQMgrModule;
 	uint32_t													m_nDPacketNumPerTime;
 
-	std::function<void*(CCorutinePlusThreadData*)>				m_pCreateFunc;
-	std::function<void(void*)>									m_pReleaseFunc;
 	//ctxhandle
 	CCoroutineCtxHandle											m_gHandle;
 	//ctx管理
@@ -100,6 +73,9 @@ protected:
 	CXKRSAManager												m_rsaMgr;
 	//默认的http服务
 	uint32_t													m_nDefaultHttpCtxID;
+
+	//存放线程数据
+	basiclib::CBasicThreadTLS									m_tls;
 protected:
 	//不会释放的ctx
 	CCoroutineCtx_Log*											m_pLog;
@@ -108,6 +84,7 @@ protected:
 	friend class CCoroutineCtx;
 	friend class CCtx_CorutinePlusThreadData;
 };
+
 #pragma warning (pop)
 
 #endif

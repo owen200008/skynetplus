@@ -23,10 +23,10 @@ if(MSVC)
 	include_directories(${BasicLibPath}/3rd/libevent/build/include)
 	set(RunProjectCXX_FLAGS "${RunProjectCXX_FLAGS} /MP")
 	set(RunProjectC_FLAGS "${RunProjectC_FLAGS} /MP")
-	add_definitions(-DUNICODE -D_UNICODE -D__BASICWINDOWS -DBASIC_DLL_IMPORTS)
+	add_definitions(-DUNICODE -D_UNICODE -D__BASICWINDOWS -DBASIC_DLL_IMPORTS  -DKAGUYA_SUPPORT_MULTIPLE_SHARED_LIBRARY)
 else()
 	set(RunProjectCXX_FLAGS "${RunProjectCXX_FLAGS} --std=c++11")
-	add_definitions(-DLINUX -D__LINUX -DBASIC_DLL_IMPORTS)
+	add_definitions(-DLINUX -D__LINUX -DBASIC_DLL_IMPORTS  -DKAGUYA_SUPPORT_MULTIPLE_SHARED_LIBRARY)
 endif()
 
 #flag
@@ -36,21 +36,20 @@ set(CMAKE_C_FLAGS ${RunProjectC_FLAGS})
 set(RunProjectLinks ${RunProjectLinks} basicdll cryptopp-static kernel)
 
 set(RunProject_SOURCES
-	${BasicLibPath}/src/scbasic/net/net.h
-	${BasicLibPath}/src/scbasic/net/sendbuffer.h
-	${BasicLibPath}/src/scbasic/net/net.cpp
-	${BasicLibPath}/src/scbasic/net/sendbuffer.cpp
     ${PROJECT_SOURCE_DIR}/../skynetplusprotocal/skynetplusprotocal.h
+	${PROJECT_SOURCE_DIR}/../skynetplusprotocal/skynetplusprotocal.cpp
     ${PROJECT_SOURCE_DIR}/../skynetplusprotocal/skynetplusprotocal_auto.h
+	${PROJECT_SOURCE_DIR}/../skynetplusprotocal/skynetplusprotocal_auto.cpp
     ${PROJECT_SOURCE_DIR}/../skynetplusprotocal/skynetplusprotocal_define.h
     ${PROJECT_SOURCE_DIR}/../skynetplusprotocal/skynetplusprotocal_error.h
     ${PROJECT_SOURCE_DIR}/../skynetplusprotocal/skynetplusprotocal_function.h
     ${PROJECT_SOURCE_DIR}/interationcenter.h
     ${PROJECT_SOURCE_DIR}/interationcenterserversessionctx.h
-	${PROJECT_SOURCE_DIR}/../skynetplusprotocal/skynetplusprotocal_auto.cpp
     ${PROJECT_SOURCE_DIR}/interationcenter.cpp
     ${PROJECT_SOURCE_DIR}/interationcenterserversessionctx.cpp
     ${PROJECT_SOURCE_DIR}/main.cpp
+	${PROJECT_SOURCE_DIR}/ctx_gateinteration.cpp
+	${PROJECT_SOURCE_DIR}/ctx_gateinteration.h
 		)
 set(TotalSourceData ${RunProject_SOURCES})
 source_group_by_dir(TotalSourceData)

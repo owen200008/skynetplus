@@ -15,18 +15,19 @@ public:
     //! 开始服务
     virtual void StartServer(basiclib::CBasicPreSend* pPreSend = nullptr);
 
-    //! 认证通过开启serversession
-    virtual bool VerifySuccessCreateServerSession(basiclib::CBasicSessionNetClient* pClient);
-
     //! 获取server
     CCFrameServer* GetServer(){ return m_pServer; }
+
+	//! 获取gatectxid
+	uint32_t GetGateCtxID() { return m_nCtxIDGate; }
 protected:
-    virtual CCFrameServer* CreateServer(const char* pKey, const std::function<const char*(InitGetParamType, const char* pKey, const char* pDefault)>& func);
+    virtual CCFrameServer* CreateInitServer(const char* pKey, const std::function<const char*(InitGetParamType, const char* pKey, const char* pDefault)>& func);
+	virtual CCFrameServer* CreateServer();
 protected:
+	uint32_t					m_nCtxIDGate;
     const char*                 m_pListenAddress;
     const char*                 m_pIPTrust;
     CCFrameServer*              m_pServer;
-    const char*                 m_pServerSessionCtx;
 };
 
 #endif

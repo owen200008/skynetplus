@@ -20,7 +20,7 @@ CNet_RedisInterface::~CNet_RedisInterface(){
         m_pRedisReader = nullptr;
     }
     if (m_pClient){
-        m_pClient->Release();
+        m_pClient->SafeDelete();
     }
 }
 
@@ -46,7 +46,7 @@ bool CNet_RedisInterface::InitNet(CCoroutineCtx_RedisInterface* pInterface, cons
         m_strPwd = pPwd;
     if (pDB)
         m_strDB = pDB;
-    m_pClient = CCommonClientSession::CreateCCommonClientSession();
+    m_pClient = CCommonClientSession::CreateNetClient();
     m_pClient->bind_connect(MakeFastFunction(this, &CNet_RedisInterface::OnConnect));
     m_pClient->bind_disconnect(MakeFastFunction(this, &CNet_RedisInterface::OnDisconnect));
     m_pClient->bind_idle(MakeFastFunction(this, &CNet_RedisInterface::OnIdle));
@@ -54,8 +54,7 @@ bool CNet_RedisInterface::InitNet(CCoroutineCtx_RedisInterface* pInterface, cons
     return true;
 }
 
-bool CNet_RedisInterface::CheckVerifyPwd(basiclib::CBasicSessionNetClient* pNotify, basiclib::CBasicSmartBuffer& smBuf)
-{
+bool CNet_RedisInterface::CheckVerifyPwd(basiclib::CBasicSessionNetNotify* pNotify, basiclib::CBasicSmartBuffer& smBuf){
     if (!m_strPwd.IsEmpty()){
         CRedisSendPacket packetAuth;
         basiclib::CNetBasicValue setValue[2];
@@ -68,8 +67,7 @@ bool CNet_RedisInterface::CheckVerifyPwd(basiclib::CBasicSessionNetClient* pNoti
     }
     return false;
 }
-bool CNet_RedisInterface::CheckVerifyDB(basiclib::CBasicSessionNetClient* pNotify, basiclib::CBasicSmartBuffer& smBuf)
-{
+bool CNet_RedisInterface::CheckVerifyDB(basiclib::CBasicSessionNetNotify* pNotify, basiclib::CBasicSmartBuffer& smBuf){
     if (!m_strDB.IsEmpty()){
         CRedisSendPacket packetAuth;
         basiclib::CNetBasicValue setValue[2];
@@ -88,8 +86,7 @@ void CNet_RedisInterface::OnNetSuccessVerify(){
     m_pInterface->OnNetVerifySuccess();
 }
 
-int32_t CNet_RedisInterface::OnConnect(CBasicSessionNetClient* pClient, uint32_t nCode)
-{
+int32_t CNet_RedisInterface::OnConnect(CBasicSessionNetNotify* pClient, uint32_t nCode){
     if (m_pRedisReader){
         redisReaderFree(m_pRedisReader);
         m_pRedisReader = nullptr;
@@ -111,7 +108,7 @@ int32_t CNet_RedisInterface::OnConnect(CBasicSessionNetClient* pClient, uint32_t
     }
     return BASIC_NET_OK;
 }
-int32_t CNet_RedisInterface::OnReceiveVerify(basiclib::CBasicSessionNetClient* pNotify, Net_UInt dwNetCode, Net_Int cbData, const char* pszData){
+int32_t CNet_RedisInterface::OnReceiveVerify(basiclib::CBasicSessionNetNotify* pNotify, Net_UInt dwNetCode, Net_Int cbData, const char* pszData){
     IsErrorHapper(redisReaderFeed(m_pRedisReader, pszData, cbData) == REDIS_OK, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) Redis Verify Feed Error, Close", __FUNCTION__, __FILE__, __LINE__); pNotify->Close(0); return BASIC_NET_GENERIC_ERROR);
     void* pReply = nullptr;
     IsErrorHapper(redisReaderGetReply(m_pRedisReader, &pReply) == REDIS_OK, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) Redis Verify GetReply Error, Close", __FUNCTION__, __FILE__, __LINE__); pNotify->Close(0); return BASIC_NET_GENERIC_ERROR);
@@ -139,8 +136,7 @@ int32_t CNet_RedisInterface::OnReceiveVerify(basiclib::CBasicSessionNetClient* p
     }
     return nRet;
 }
-int32_t CNet_RedisInterface::OnReceiveVerifyDB(basiclib::CBasicSessionNetClient* pNotify, Net_UInt dwNetCode, Net_Int cbData, const char* pszData)
-{
+int32_t CNet_RedisInterface::OnReceiveVerifyDB(basiclib::CBasicSessionNetNotify* pNotify, Net_UInt dwNetCode, Net_Int cbData, const char* pszData){
     IsErrorHapper(redisReaderFeed(m_pRedisReader, pszData, cbData) == REDIS_OK, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) Redis VerifyDB Feed Error, Close", __FUNCTION__, __FILE__, __LINE__); pNotify->Close(0); return BASIC_NET_GENERIC_ERROR);
     void* pReply = nullptr;
     IsErrorHapper(redisReaderGetReply(m_pRedisReader, &pReply) == REDIS_OK, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) Redis VerifyDB GetReply Error, Close", __FUNCTION__, __FILE__, __LINE__); pNotify->Close(0); return BASIC_NET_GENERIC_ERROR);
@@ -161,8 +157,7 @@ int32_t CNet_RedisInterface::OnReceiveVerifyDB(basiclib::CBasicSessionNetClient*
     }
     return nRet;
 }
-int32_t CNet_RedisInterface::OnReceive(basiclib::CBasicSessionNetClient* pNotify, Net_UInt dwNetCode, Net_Int cbData, const char* pszData)
-{
+int32_t CNet_RedisInterface::OnReceive(basiclib::CBasicSessionNetNotify* pNotify, Net_UInt dwNetCode, Net_Int cbData, const char* pszData){
     IsErrorHapper(redisReaderFeed(m_pRedisReader, pszData, cbData) == REDIS_OK, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) Redis OnReceive Feed Error, Close", __FUNCTION__, __FILE__, __LINE__); pNotify->Close(0); return BASIC_NET_GENERIC_ERROR);
     bool bContinueFindReply = false;
     do{
@@ -179,8 +174,7 @@ int32_t CNet_RedisInterface::OnReceive(basiclib::CBasicSessionNetClient* pNotify
 
     return BASIC_NET_OK;
 }
-int32_t CNet_RedisInterface::OnDisconnect(basiclib::CBasicSessionNetClient* pNotify, Net_UInt dwNetCode)
-{
+int32_t CNet_RedisInterface::OnDisconnect(basiclib::CBasicSessionNetNotify* pNotify, Net_UInt dwNetCode){
     if (m_pRedisReader){
         redisReaderFree(m_pRedisReader);
         m_pRedisReader = nullptr;
@@ -191,39 +185,33 @@ int32_t CNet_RedisInterface::OnDisconnect(basiclib::CBasicSessionNetClient* pNot
     return BASIC_NET_OK;
 }
 
-int32_t CNet_RedisInterface::OnIdle(basiclib::CBasicSessionNetClient*, uint32_t nIdle)
-{
+int32_t CNet_RedisInterface::OnIdle(basiclib::CBasicSessionNetNotify*, uint32_t nIdle){
     if (nIdle % 15 == 14){
         m_pInterface->OnNetIdle();
     }
     return BASIC_NET_OK;
 }
 
-void CNet_RedisInterface::Func_ReceiveRedisReply(CCoroutineCtx* pCtx, ctx_message* pMsg)
-{
+void CNet_RedisInterface::Func_ReceiveRedisReply(CCoroutineCtx* pCtx, ctx_message* pMsg){
     CCoroutineCtx_RedisInterface* pRedis = (CCoroutineCtx_RedisInterface*)pCtx;
     if (!pRedis->ReceiveRedisReply(pMsg)){
         freeReplyObject((redisReply*)pMsg->m_session);
     }
 }
-void CNet_RedisInterface::Func_ReceiveRedisDisconnect(CCoroutineCtx* pCtx, ctx_message* pMsg)
-{
+void CNet_RedisInterface::Func_ReceiveRedisDisconnect(CCoroutineCtx* pCtx, ctx_message* pMsg){
     CCoroutineCtx_RedisInterface* pRedis = (CCoroutineCtx_RedisInterface*)pCtx;
     pRedis->ReceiveRedisDisconnect(pMsg);
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 CreateTemplateSrc(CCoroutineCtx_CRedis)
 
-CCoroutineCtx_CRedis::CCoroutineCtx_CRedis(const char* pKeyName, const char* pClassName) : CCoroutineCtx_RedisInterface(pKeyName, pClassName)
-{
+CCoroutineCtx_CRedis::CCoroutineCtx_CRedis(const char* pKeyName, const char* pClassName) : CCoroutineCtx_RedisInterface(pKeyName, pClassName){
     m_ctxInsCache.SetDataLength(10240);
     m_ctxInsCache.SetDataLength(0);
     m_nDefaultTimeoutRequest = 5;
 }
 
-CCoroutineCtx_CRedis::~CCoroutineCtx_CRedis()
-{
-
+CCoroutineCtx_CRedis::~CCoroutineCtx_CRedis(){
 }
 
 int CCoroutineCtx_CRedis::InitCtx(CMQMgr* pMQMgr, const std::function<const char*(InitGetParamType, const char* pKey, const char* pDefault)>& func){
@@ -256,7 +244,7 @@ void CCoroutineCtx_CRedis::ReleaseCtx(){
 }
 
 //! 协程里面调用Bussiness消息
-int CCoroutineCtx_CRedis::DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg){
+int CCoroutineCtx_CRedis::DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket){
     switch (nType){
     case 0:
         return DispathBussinessMsg_0_SendRequest(pCorutine, nParam, pParam, pRetPacket);
@@ -271,13 +259,17 @@ int CCoroutineCtx_CRedis::DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t
 
 //! 发送请求
 long CCoroutineCtx_CRedis::DispathBussinessMsg_0_SendRequest(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket){
-    IsErrorHapper(nParam == 1, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nParam); return -1);
-    ctx_message* pCurrentMsg = nullptr;
-	CCoroutineCtx* pCurrentCtx = nullptr;
-    if (!m_netRedis.IsTransmit())
-        return -2;
+	MACRO_DispatchCheckParam1(CRedisSendPacket* pSendPacket, (CRedisSendPacket*));
+	if(!m_netRedis.IsTransmit()){
+		CKernelMsgQueueRequestMgr requestMgr(m_vtWaitRequest, pCorutine);
+		//发送完成，直接进入yield，等待唤醒
+		MACRO_YieldToCtx(pCorutine, 0,
+						 return DEFINECTX_RET_TYPE_COROUTINEERR);
+		if(!m_netRedis.IsTransmit()){
+			return DEFINECTX_RET_TYPE_NoNet;
+		}
+	}
     
-    CRedisSendPacket* pSendPacket = (CRedisSendPacket*)pParam[0];
     CRedisReplyPacket* pReplyPacket = (CRedisReplyPacket*)pRetPacket;
     do{
         //! 保存
@@ -288,31 +280,33 @@ long CCoroutineCtx_CRedis::DispathBussinessMsg_0_SendRequest(CCorutinePlus* pCor
         m_netRedis.SendRedisData(m_ctxInsCache);
 
         //截断协程由子协程唤醒(认为结束了 自己保存)
-        if (!YieldCorutineToCtx(pCorutine, 0, pCurrentCtx, pCurrentMsg)){
-            //代表进来的时候sourcectxid已经不存在了
-            return -4;
-        }
-        redisReply* pGetRedisReply = (redisReply*)pCurrentMsg->m_session;
+		MACRO_YieldToCtx(pCorutine, 0, 
+						 return DEFINECTX_RET_TYPE_COROUTINEERR;);
+		MACRO_GetYieldParam1(redisReply* pGetRedisReply, redisReply);
         pReplyPacket->BindReply(pGetRedisReply);
         if (pGetRedisReply->type == REDIS_REPLY_ERROR){
-            return 1;
+            return DEFINECTX_RET_TYPE_ReceDataErr;
         }
         pSendPacket = pSendPacket->GetNextSendPacket();
         pReplyPacket = pReplyPacket->GetNextReplyPacket();
     } while (pSendPacket && pReplyPacket);
-    return 0;
+    return DEFINECTX_RET_TYPE_SUCCESS;
 }
 
 //! 发送请求
 long CCoroutineCtx_CRedis::DispathBussinessMsg_1_SendRequest(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket){
     IsErrorHapper(nParam == 1, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nParam); return -1);
-    CCoroutineCtx* pCurrentCtx = nullptr;
-    ctx_message* pCurrentMsg = nullptr;
+	MACRO_DispatchCheckParam1(basiclib::CBasicStringArray* pArrayRequest, (basiclib::CBasicStringArray*));
+	if(!m_netRedis.IsTransmit()){
+		CKernelMsgQueueRequestMgr requestMgr(m_vtWaitRequest, pCorutine);
+		//发送完成，直接进入yield，等待唤醒
+		MACRO_YieldToCtx(pCorutine, 0,
+						 return DEFINECTX_RET_TYPE_COROUTINEERR);
+		if(!m_netRedis.IsTransmit()){
+			return DEFINECTX_RET_TYPE_NoNet;
+		}
+	}
 
-    if (!m_netRedis.IsTransmit())
-        return -2;
-
-    basiclib::CBasicStringArray* pArrayRequest = (basiclib::CBasicStringArray*)pParam[0];
     CRedisReplyPacket* pReplyPacket = (CRedisReplyPacket*)pRetPacket;
     for (int i = 0; i < pArrayRequest->GetSize() && pReplyPacket; i++){
         //! 
@@ -332,35 +326,45 @@ long CCoroutineCtx_CRedis::DispathBussinessMsg_1_SendRequest(CCorutinePlus* pCor
         m_netRedis.SendRedisData(m_ctxInsCache);
 
         //截断协程由子协程唤醒(认为结束了 自己保存)
-        if (!YieldCorutineToCtx(pCorutine, 0, pCurrentCtx, pCurrentMsg)){
-            //代表进来的时候sourcectxid已经不存在了
-            return -4;
-        }
-        redisReply* pGetRedisReply = (redisReply*)pCurrentMsg->m_session;
+		MACRO_YieldToCtx(pCorutine, 0,
+						 return DEFINECTX_RET_TYPE_COROUTINEERR);
+		MACRO_GetYieldParam1(redisReply* pGetRedisReply, redisReply);
         pReplyPacket->BindReply(pGetRedisReply);
         if (pGetRedisReply->type == REDIS_REPLY_ERROR){
-            return 1;
+            return DEFINECTX_RET_TYPE_ReceDataErr;
         }
         pReplyPacket = pReplyPacket->GetNextReplyPacket();
     }
-    return 0;
+    return DEFINECTX_RET_TYPE_SUCCESS;
 }
 
 
-void CCoroutineCtx_CRedis::OnTimer(CCoroutineCtx* pCtx)
-{
+void CCoroutineCtx_CRedis::OnTimer(CCoroutineCtx* pCtx){
     CCoroutineCtx_CRedis* pRedisCtx = (CCoroutineCtx_CRedis*)pCtx;
     time_t tmNow = time(NULL);
     
     KernelRequestStoreData* pRequestStore = pRedisCtx->m_vtRequest.FrontData();
     IsErrorHapper(pRequestStore == nullptr || !pRequestStore->IsTimeOut(tmNow, pRedisCtx->m_nDefaultTimeoutRequest), CCFrameSCBasicLogEventErrorV("%s(%s:%d) OnTimerRedis Timeout, Close", __FUNCTION__, __FILE__, __LINE__); pRedisCtx->m_netRedis.ErrorClose(); return);
     pRedisCtx->m_netRedis.CheckConnect();
+
+	do{
+		pRequestStore = pRedisCtx->m_vtWaitRequest.FrontData();
+		if(pRequestStore && pRequestStore->IsTimeOut(tmNow, pRedisCtx->m_nDefaultTimeoutRequest)){
+			MACRO_ResumeToCtx(pRequestStore->m_pCorutine, pRedisCtx, CCtx_ThreadPool::GetOrCreateSelfThreadData(),
+							  CCFrameSCBasicLogEventErrorV("%s(%s:%d) OnTimerRedis timeout wait", __FUNCTION__, __FILE__, __LINE__); break);
+		}
+		else{
+			break;
+		}
+	} while(pRequestStore);
 }
 
 bool CCoroutineCtx_CRedis::ReceiveRedisReply(ctx_message* pMsg){
     KernelRequestStoreData* pRequestStore = m_vtRequest.FrontData();
     IsErrorHapper(pRequestStore, CCFrameSCBasicLogEventErrorV("%s(%s:%d) ReceiveRedisReply NoRequest, Close", __FUNCTION__, __FILE__, __LINE__); m_netRedis.ErrorClose(); return false);
-    IsErrorHapper(WaitResumeCoroutineCtx(pRequestStore->m_pCorutine, this, pMsg), ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) WaitResumeCoroutineCtx Fail", __FUNCTION__, __FILE__, __LINE__); return false);
+	MACRO_ResumeToCtxNormal(pRequestStore->m_pCorutine, this, CCtx_ThreadPool::GetOrCreateSelfThreadData(),
+							return false,
+							(void*)pMsg->m_session);
     return true;
 }
 
@@ -371,7 +375,7 @@ void CCoroutineCtx_CRedis::ReceiveRedisDisconnect(ctx_message* pMsg){
 		vtDeleteRequest.push_back(*pRequest);
 	});
 	for (auto& deldata : vtDeleteRequest) {
-		WaitResumeCoroutineCtxFail(deldata.m_pCorutine);
+		Ctx_ResumeCoroutine_Fail(deldata.m_pCorutine);
 	}
     if (m_vtRequest.GetMQLength() != 0){
         ASSERT(0);
@@ -380,14 +384,10 @@ void CCoroutineCtx_CRedis::ReceiveRedisDisconnect(ctx_message* pMsg){
     }
 }
 
-void CCoroutineCtx_CRedis::Corutine_OnIdleSendPing(CCorutinePlus* pCorutine)
-{
+void CCoroutineCtx_CRedis::Corutine_OnIdleSendPing(CCorutinePlus* pCorutine){
     //外部变量一定要谨慎，线程安全问题
     {
-        int nGetParamCount = 0;
-        void** pGetParam = GetCoroutineCtxParamInfo(pCorutine, nGetParamCount);
-        IsErrorHapper(nGetParamCount == 1, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nGetParamCount); return);
-        CCoroutineCtx_CRedis* pRedis = (CCoroutineCtx_CRedis*)pGetParam[0];
+		CCoroutineCtx_CRedis* pRedis = pCorutine->GetParamPoint<CCoroutineCtx_CRedis>(0);
 
         CRedisSendPacket sendPacket;
         basiclib::CNetBasicValue setValue;
@@ -395,7 +395,7 @@ void CCoroutineCtx_CRedis::Corutine_OnIdleSendPing(CCorutinePlus* pCorutine)
         sendPacket.PushBasicValue(setValue);
 
         CRedisReplyPacket replyPacket;
-        IsErrorHapper(CCFrameRedisRequest(pRedis->GetCtxID(), pRedis->GetCtxID(), pCorutine, sendPacket, replyPacket), return);
+        IsErrorHapper(CCFrameRedisRequest(0, pRedis->GetCtxID(), pCorutine, sendPacket, replyPacket), return);
         redisReply* pReply = replyPacket.GetReply();
         IsErrorHapper(pReply->type == REDIS_REPLY_STATUS, CCFrameSCBasicLogEventErrorV("%s(%s:%d) Idle Receive No REDIS_REPLY_STATUS %d, Close", __FUNCTION__, __FILE__, __LINE__, pReply->type); pRedis->m_netRedis.ErrorClose(); return);
         IsErrorHapper(strcmp(pReply->str, "PONG") == 0, CCFrameSCBasicLogEventErrorV("%s(%s:%d) Idle Receive No PONG, Close", __FUNCTION__, __FILE__, __LINE__); pRedis->m_netRedis.ErrorClose(); return);
@@ -404,26 +404,34 @@ void CCoroutineCtx_CRedis::Corutine_OnIdleSendPing(CCorutinePlus* pCorutine)
 
 void CCoroutineCtx_CRedis::OnNetIdle(){
     //15s 如果没有发送数据, 就发送ping命令
-    const int nSetParam = 1;
-    void* pSetParam[nSetParam] = { this };
-    CreateResumeCoroutineCtx(CCoroutineCtx_CRedis::Corutine_OnIdleSendPing, 0, nSetParam, pSetParam);
+	Ctx_CreateCoroutine(0, CCoroutineCtx_CRedis::Corutine_OnIdleSendPing, this);
 }
 
 void CCoroutineCtx_CRedis::OnNetVerifySuccess(){
-
+	//认证成功之后将等待队列的发送
+	ctx_message msg(0, [](CCoroutineCtx* pCtx, ctx_message* pMsg)->void{
+		CCoroutineCtx_CRedis* pRedisCtx = (CCoroutineCtx_CRedis*)pCtx;
+		KernelRequestStoreData* pRequestStore = nullptr;
+		do{
+			pRequestStore = pRedisCtx->m_vtWaitRequest.FrontData();
+			if(pRequestStore){
+				MACRO_ResumeToCtx(pRequestStore->m_pCorutine, pRedisCtx, CCtx_ThreadPool::GetOrCreateSelfThreadData(),
+									CCFrameSCBasicLogEventErrorV("%s(%s:%d) OnTimerMysql wait queue wakeup", __FUNCTION__, __FILE__, __LINE__); break);
+			}
+		} while(pRequestStore);
+	});
+	PushMessage(msg);
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 CreateTemplateSrc(CCoroutineCtx_CRedisWatch)
 
-CCoroutineCtx_CRedisWatch::CCoroutineCtx_CRedisWatch(const char* pKeyName, const char* pClassName) : CCoroutineCtx_RedisInterface(pKeyName, pClassName)
-{
+CCoroutineCtx_CRedisWatch::CCoroutineCtx_CRedisWatch(const char* pKeyName, const char* pClassName) : CCoroutineCtx_RedisInterface(pKeyName, pClassName){
     m_ctxInsCache.SetDataLength(10240);
     m_ctxInsCache.SetDataLength(0);
+	m_nDefaultTimeoutRequest = 5;
 }
 
-CCoroutineCtx_CRedisWatch::~CCoroutineCtx_CRedisWatch()
-{
-
+CCoroutineCtx_CRedisWatch::~CCoroutineCtx_CRedisWatch(){
 }
 
 int CCoroutineCtx_CRedisWatch::InitCtx(CMQMgr* pMQMgr, const std::function<const char*(InitGetParamType, const char* pKey, const char* pDefault)>& func){
@@ -440,6 +448,8 @@ int CCoroutineCtx_CRedisWatch::InitCtx(CMQMgr* pMQMgr, const std::function<const
     const char* pPwd = func(InitGetParamType_Config, szBuf, "");
     sprintf(szBuf, "%s_AddressDB", m_pCtxName);
     const char* pDB = func(InitGetParamType_Config, szBuf, "");
+	sprintf(szBuf, "%s_timeout", m_pCtxName);
+	m_nDefaultTimeoutRequest = atol(func(InitGetParamType_Config, szBuf, "5"));
     if (!m_netRedis.InitNet(this, pAddress, pPwd, pDB)){
         return 2;
     }
@@ -456,7 +466,7 @@ void CCoroutineCtx_CRedisWatch::ReleaseCtx(){
 
 
 //! 协程里面调用Bussiness消息
-int CCoroutineCtx_CRedisWatch::DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg){
+int CCoroutineCtx_CRedisWatch::DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket){
     switch (nType){
     case 0:
         return DispathBussinessMsg_0_subscribe(pCorutine, nParam, pParam);
@@ -476,10 +486,15 @@ int CCoroutineCtx_CRedisWatch::DispathBussinessMsg(CCorutinePlus* pCorutine, uin
 //! 发送请求
 int CCoroutineCtx_CRedisWatch::DispathBussinessMsg_0_subscribe(CCorutinePlus* pCorutine, int nParam, void** pParam){
     IsErrorHapper(nParam == 1, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nParam); return -1);
-    CCoroutineCtx* pCurrentCtx = nullptr;
-    ctx_message* pCurrentMsg = nullptr;
-    if (!m_netRedis.IsTransmit())
-        return -2;
+	if(!m_netRedis.IsTransmit()){
+		CKernelMsgQueueRequestMgr requestMgr(m_vtWaitRequest, pCorutine);
+		//发送完成，直接进入yield，等待唤醒
+		MACRO_YieldToCtx(pCorutine, 0,
+						 return DEFINECTX_RET_TYPE_COROUTINEERR);
+		if(!m_netRedis.IsTransmit()){
+			return DEFINECTX_RET_TYPE_NoNet;
+		}
+	}
     basiclib::CBasicString* pStrSend = (basiclib::CBasicString*)pParam[0];
     if (m_mapSub.find(*pStrSend) != m_mapSub.end()){
         //已经存在
@@ -502,15 +517,19 @@ int CCoroutineCtx_CRedisWatch::DispathBussinessMsg_0_subscribe(CCorutinePlus* pC
 }
 
 int CCoroutineCtx_CRedisWatch::DispathBussinessMsg_1_psubscribe(CCorutinePlus* pCorutine, int nParam, void** pParam){
-    IsErrorHapper(nParam == 1, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nParam); return -1);
-    CCoroutineCtx* pCurrentCtx = nullptr;
-    ctx_message* pCurrentMsg = nullptr;
-    if (!m_netRedis.IsTransmit())
-        return -2;
-    basiclib::CBasicString* pStrSend = (basiclib::CBasicString*)pParam[0];
+	MACRO_DispatchCheckParam1(basiclib::CBasicString* pStrSend, (basiclib::CBasicString*))
+    if (!m_netRedis.IsTransmit()){
+		CKernelMsgQueueRequestMgr requestMgr(m_vtWaitRequest, pCorutine);
+		//发送完成，直接进入yield，等待唤醒
+		MACRO_YieldToCtx(pCorutine, 0,
+						 return DEFINECTX_RET_TYPE_COROUTINEERR);
+		if(!m_netRedis.IsTransmit()){
+			return DEFINECTX_RET_TYPE_NoNet;
+		}
+	}
     if (m_mapPSub.find(*pStrSend) != m_mapPSub.end()){
         //已经存在
-        return -3;
+        return DEFINECTX_RET_TYPE_SUCCESS;
     }
     //发送
     CRedisSendPacket sendPacket;
@@ -525,18 +544,22 @@ int CCoroutineCtx_CRedisWatch::DispathBussinessMsg_1_psubscribe(CCorutinePlus* p
 
     sendPacket.DataToSmartBuffer(m_ctxInsCache);
     m_netRedis.SendRedisData(m_ctxInsCache);
-    return 0;
+    return DEFINECTX_RET_TYPE_SUCCESS;
 }
 int CCoroutineCtx_CRedisWatch::DispathBussinessMsg_2_unsubscribe(CCorutinePlus* pCorutine, int nParam, void** pParam){
-    IsErrorHapper(nParam == 1, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nParam); return -1);
-    CCoroutineCtx* pCurrentCtx = nullptr;
-    ctx_message* pCurrentMsg = nullptr;
-    if (!m_netRedis.IsTransmit())
-        return -2;
-    basiclib::CBasicString* pStrSend = (basiclib::CBasicString*)pParam[0];
+	MACRO_DispatchCheckParam1(basiclib::CBasicString* pStrSend, (basiclib::CBasicString*))
+    if (!m_netRedis.IsTransmit()){
+		CKernelMsgQueueRequestMgr requestMgr(m_vtWaitRequest, pCorutine);
+		//发送完成，直接进入yield，等待唤醒
+		MACRO_YieldToCtx(pCorutine, 0,
+						 return DEFINECTX_RET_TYPE_COROUTINEERR);
+		if(!m_netRedis.IsTransmit()){
+			return DEFINECTX_RET_TYPE_NoNet;
+		}
+	}
     if (m_mapSub.find(*pStrSend) == m_mapSub.end()){
         //不存在
-        return -3;
+        return DEFINECTX_RET_TYPE_SUCCESS;
     }
     //发送
     CRedisSendPacket sendPacket;
@@ -548,19 +571,23 @@ int CCoroutineCtx_CRedisWatch::DispathBussinessMsg_2_unsubscribe(CCorutinePlus* 
 
     sendPacket.DataToSmartBuffer(m_ctxInsCache);
     m_netRedis.SendRedisData(m_ctxInsCache);
-    return 0;
+    return DEFINECTX_RET_TYPE_SUCCESS;
 }
 
 int CCoroutineCtx_CRedisWatch::DispathBussinessMsg_3_punsubscribe(CCorutinePlus* pCorutine, int nParam, void** pParam){
-    IsErrorHapper(nParam == 1, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nParam); return -1);
-    CCoroutineCtx* pCurrentCtx = nullptr;
-    ctx_message* pCurrentMsg = nullptr;
-    if (!m_netRedis.IsTransmit())
-        return -2;
-    basiclib::CBasicString* pStrSend = (basiclib::CBasicString*)pParam[0];
+	MACRO_DispatchCheckParam1(basiclib::CBasicString* pStrSend, (basiclib::CBasicString*))
+	if(!m_netRedis.IsTransmit()){
+		CKernelMsgQueueRequestMgr requestMgr(m_vtWaitRequest, pCorutine);
+		//发送完成，直接进入yield，等待唤醒
+		MACRO_YieldToCtx(pCorutine, 0,
+						 return DEFINECTX_RET_TYPE_COROUTINEERR);
+		if(!m_netRedis.IsTransmit()){
+			return DEFINECTX_RET_TYPE_NoNet;
+		}
+	}
     if (m_mapPSub.find(*pStrSend) == m_mapPSub.end()){
         //不存在
-        return -3;
+        return DEFINECTX_RET_TYPE_SUCCESS;
     }
     //发送
     CRedisSendPacket sendPacket;
@@ -572,24 +599,36 @@ int CCoroutineCtx_CRedisWatch::DispathBussinessMsg_3_punsubscribe(CCorutinePlus*
 
     sendPacket.DataToSmartBuffer(m_ctxInsCache);
     m_netRedis.SendRedisData(m_ctxInsCache);
-    return 0;
+    return DEFINECTX_RET_TYPE_SUCCESS;
 }
 
-void CCoroutineCtx_CRedisWatch::OnTimer(CCoroutineCtx* pCtx)
-{
+void CCoroutineCtx_CRedisWatch::OnTimer(CCoroutineCtx* pCtx){
     CCoroutineCtx_CRedisWatch* pRedisCtx = (CCoroutineCtx_CRedisWatch*)pCtx;
     pRedisCtx->m_netRedis.CheckConnect();
+	time_t tmNow = time(nullptr);
+	KernelRequestStoreData* pRequestStore = nullptr;
+	do{
+		pRequestStore = pRedisCtx->m_vtWaitRequest.FrontData();
+		if(pRequestStore && pRequestStore->IsTimeOut(tmNow, pRedisCtx->m_nDefaultTimeoutRequest)){
+			MACRO_ResumeToCtx(pRequestStore->m_pCorutine, pRedisCtx, CCtx_ThreadPool::GetOrCreateSelfThreadData(),
+							  CCFrameSCBasicLogEventErrorV("%s(%s:%d) OnTimerRedis timeout wait", __FUNCTION__, __FILE__, __LINE__); break);
+		}
+		else{
+			break;
+		}
+	} while(pRequestStore);
 }
 
 void CCoroutineCtx_CRedisWatch::Corutine_Message(CCorutinePlus* pCorutine){
-    int nGetParamCount = 0;
-    void** pGetParam = GetCoroutineCtxParamInfo(pCorutine, nGetParamCount);
-    redisReply* pReply = (redisReply*)pGetParam[0];
-    RedisWatchStore* pWatch = (RedisWatchStore*)pGetParam[1];
+	pCorutine->SetCurrentCtx(pCorutine->GetParamPoint<CCoroutineCtx>(2));
+    redisReply* pReply = pCorutine->GetParamPoint<redisReply>(0);
+    RedisWatchStore* pWatch = pCorutine->GetParamPoint<RedisWatchStore>(1);
 
-    void* pReplyPacket = nullptr;
     int nRetValue = 0;
-    WaitExeCoroutineToCtxBussiness(pCorutine, 0, pWatch->m_nSourceCtxID, pWatch->m_nType, nGetParamCount, pGetParam, pReplyPacket, nRetValue);
+	const int nSetParam = 2;
+	void* pSetParam[nSetParam] = { pReply, pWatch };
+	MACRO_ExeToCtxParam2(pCorutine, 0, pWatch->m_nSourceCtxID, pWatch->m_nType, pReply, pWatch, nullptr,
+						 );
     freeReplyObject(pReply);
 }
 
@@ -605,9 +644,7 @@ bool CCoroutineCtx_CRedisWatch::ReceiveRedisReply(ctx_message* pMsg){
         if (strcmp(pMessage->str, "message") == 0){
             MapRequest::iterator iter = m_mapSub.find(pReply->element[1]->str);
             if (iter->second.m_bInitSuccess){
-                const int nSetParam = 2;
-                void* pSetParam[nSetParam] = { pReply, &iter->second };
-                CreateResumeCoroutineCtx(CCoroutineCtx_CRedisWatch::Corutine_Message, m_ctxID, nSetParam, pSetParam);
+				Ctx_CreateCoroutine(m_ctxID, CCoroutineCtx_CRedisWatch::Corutine_Message, pReply, &iter->second, this);
             }
             else{
                 CCFrameSCBasicLogEventErrorV("%s(%s:%d) Redis message noinit(%s)", __FUNCTION__, __FILE__, __LINE__, pReply->element[1]->str);
@@ -616,9 +653,7 @@ bool CCoroutineCtx_CRedisWatch::ReceiveRedisReply(ctx_message* pMsg){
         else if (strcmp(pMessage->str, "pmessage") == 0){
             MapRequest::iterator iter = m_mapPSub.find(pReply->element[1]->str);
             if (iter->second.m_bInitSuccess){
-                const int nSetParam = 2;
-                void* pSetParam[nSetParam] = { pReply, &iter->second };
-                CreateResumeCoroutineCtx(CCoroutineCtx_CRedisWatch::Corutine_Message, m_ctxID, nSetParam, pSetParam);
+				Ctx_CreateCoroutine(m_ctxID, CCoroutineCtx_CRedisWatch::Corutine_Message, pReply, &iter->second, this);
             }
             else{
                 CCFrameSCBasicLogEventErrorV("%s(%s:%d) Redis pmessage noinit(%s)", __FUNCTION__, __FILE__, __LINE__, pReply->element[1]->str);
@@ -668,19 +703,25 @@ void CCoroutineCtx_CRedisWatch::OnNetIdle(){
 }
 
 void CCoroutineCtx_CRedisWatch::OnNetVerifySuccess(){
-
+	//认证成功之后将等待队列的发送
+	ctx_message msg(0, [](CCoroutineCtx* pCtx, ctx_message* pMsg){
+		CCoroutineCtx_CRedisWatch* pRedisCtx = (CCoroutineCtx_CRedisWatch*)pCtx;
+		KernelRequestStoreData* pRequestStore = nullptr;
+		do{
+			pRequestStore = pRedisCtx->m_vtWaitRequest.FrontData();
+			if(pRequestStore){
+				MACRO_ResumeToCtx(pRequestStore->m_pCorutine, pRedisCtx, CCtx_ThreadPool::GetOrCreateSelfThreadData(),
+								  CCFrameSCBasicLogEventErrorV("%s(%s:%d) OnTimerMysql wait queue wakeup", __FUNCTION__, __FILE__, __LINE__); break);
+			}
+		} while(pRequestStore);
+	});
+	PushMessage(msg);
 }
 
 
 bool CCFrameRedisRequest(uint32_t nResCtxID, uint32_t nRedisCtxID, CCorutinePlus* pCorutine, CRedisSendPacket& request, CRedisReplyPacket& replyPacket){
-    const int nSetParam = 1;
-    void* pSetParam[nSetParam] = { &request };
-    int nRetValue = 0;
-    if (!WaitExeCoroutineToCtxBussiness(pCorutine, nResCtxID, nRedisCtxID, 0, nSetParam, pSetParam, &replyPacket, nRetValue)){
-        ASSERT(0);
-        CCFrameSCBasicLogEventErrorV("%s(%s:%d) WaitExeCoroutineToCtxBussiness FAIL ret(%d)", __FUNCTION__, __FILE__, __LINE__, nRetValue);
-        return false;
-    }
+	MACRO_ExeToCtxParam1(pCorutine, nResCtxID, nRedisCtxID, 0, &request, &replyPacket,
+						 return false);
     return true;
 }
 

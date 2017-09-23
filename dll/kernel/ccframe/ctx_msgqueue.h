@@ -19,6 +19,7 @@
 
 //执行函数的定义
 class CCoroutineCtx;
+class CCorutinePlus;
 struct ctx_message;
 typedef void(*pRunFuncCtxMessageCallback)(CCoroutineCtx*, ctx_message*);
 
@@ -98,7 +99,6 @@ struct _SKYNET_KERNEL_DLL_API ctx_message
 #pragma	pack()
 
 class CMQMgr;
-//多生产者单消费者
 class CCtxMessageQueue : public basiclib::CLockFreeMessageQueue<ctx_message, 32>
 {
 public:

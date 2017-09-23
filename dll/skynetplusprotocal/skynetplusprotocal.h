@@ -36,7 +36,23 @@ struct SProtoHead{
     Net_UInt		m_nMethod;			//0x0000000
     Net_UInt		m_nSession;
 };
+////////////////////////////////////////////////////////////////////
 
+struct PublicSprotoRequest {
+	SProtoHead              m_head;
+	PublicSprotoRequest(Net_UInt nMethod, Net_UInt nSession);
+};
+
+struct PublicSprotoResponse {
+	SProtoHead				m_head;
+	Net_UInt				m_nError;
+	PublicSprotoResponse() {
+		m_head.m_nMethod = 0;
+		m_head.m_nSession = 0;
+		m_nError = 0;
+	}
+	void CreateWithRequest(SProtoHead& requestHead);
+};
 ////////////////////////////////////////////////////////////////////
 //! 系统域
 //! skynet服务器之间的心跳

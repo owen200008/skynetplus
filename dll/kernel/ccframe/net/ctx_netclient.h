@@ -24,7 +24,7 @@ public:
     virtual void ReleaseCtx();
 
     //! 协程里面调用Bussiness消息
-    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg);
+    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket);
 
     //! 判断是否连接，如果没有连接发起连接
     void CheckConnect();
@@ -38,15 +38,15 @@ public:
     //业务类, 全部使用静态函数, 这样可以保证动态库函数可以替换,做到动态更新
     static void OnTimer(CCoroutineCtx* pCtx);
 protected:
-    virtual long DispathBussinessMsg_Receive(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg){
+    virtual long DispathBussinessMsg_Receive(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket){
         return 0;
     }
 protected:
     virtual void OnTimerNetClient();
-    virtual int32_t OnConnect(basiclib::CBasicSessionNetClient* pClient, uint32_t nCode);
-    virtual int32_t OnReceive(basiclib::CBasicSessionNetClient* pNotify, Net_UInt dwNetCode, Net_Int cbData, const char* pszData);
-    virtual int32_t OnIdle(basiclib::CBasicSessionNetClient*, uint32_t);
-    virtual int32_t OnDisconnect(basiclib::CBasicSessionNetClient* pNotify, Net_UInt dwNetCode);
+    virtual int32_t OnConnect(basiclib::CBasicSessionNetNotify* pClient, uint32_t nCode);
+    virtual int32_t OnReceive(basiclib::CBasicSessionNetNotify* pNotify, Net_UInt dwNetCode, Net_Int cbData, const char* pszData);
+    virtual int32_t OnIdle(basiclib::CBasicSessionNetNotify*, uint32_t);
+    virtual int32_t OnDisconnect(basiclib::CBasicSessionNetNotify* pNotify, Net_UInt dwNetCode);
 protected:
     //! 创建协程
     static void Corutine_OnReceiveData(CCorutinePlus* pCorutine);

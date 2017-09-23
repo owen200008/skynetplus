@@ -36,7 +36,7 @@ int CCoroutineCtx_Http::InitCtx(CMQMgr* pMQMgr, const std::function<const char*(
 	luaL_openlibs(L);   // link lua lib
 	m_L = L;
 
-	m_pHttpServer = CHttpSessionServer::CreateHttpServer(0);
+	m_pHttpServer = CHttpSessionServer::CreateNetServer();
 	m_pHttpServer->bind_onhttpask(MakeFastFunction(this, &CCoroutineCtx_Http::OnHttpAsk));
 	m_pHttpServer->SetIpTrust(m_pTrust);
 	Net_Int nHttpRet = m_pHttpServer->StartServer(m_pAddress);
@@ -50,7 +50,7 @@ int CCoroutineCtx_Http::InitCtx(CMQMgr* pMQMgr, const std::function<const char*(
 //! 不需要自己delete，只要调用release
 void CCoroutineCtx_Http::ReleaseCtx(){
 	if (m_pHttpServer)
-		m_pHttpServer->Release();
+		m_pHttpServer->SafeDelete();
 	if(m_L)
 		lua_close(m_L);
     CoroutineCtxDelTimer(OnTimer);
@@ -58,23 +58,15 @@ void CCoroutineCtx_Http::ReleaseCtx(){
 }
 
 long CCoroutineCtx_Http::OnHttpAsk(RefHttpSession pSession, HttpRequest* pRequest, HttpResponse& response){
-	const int nSetParam = 3;
-	void* pSetParam[nSetParam] = { this, pSession.GetResFunc(), pRequest };
-	CreateResumeCoroutineCtx([](CCorutinePlus* pCorutine)->void {
+	Ctx_CreateCoroutine(0, [](CCorutinePlus* pCorutine){
 		basiclib::CBasicSmartBuffer smCacheBuf;
-		int nGetParamCount = 0;
-		void** pGetParam = GetCoroutineCtxParamInfo(pCorutine, nGetParamCount);
-		CCoroutineCtx_Http* pCtx = (CCoroutineCtx_Http*)pGetParam[0];
-		RefHttpSession pSession = RefHttpSession((CHttpSession*)pGetParam[1]);//智能指针保证不会析构
-		HttpRequest* pRequest = (HttpRequest*)pGetParam[2];
+		CCoroutineCtx_Http* pCtx = pCorutine->GetParamPoint<CCoroutineCtx_Http>(0);
+		RefHttpSession pSession = pCorutine->GetParamPoint<CHttpSession>(1);//智能指针保证不会析构
+		HttpRequest* pRequest = pCorutine->GetParamPoint<HttpRequest>(2);
 		HttpResponse response;
 
-		CCoroutineCtx* pCurrentCtx = nullptr;
-		ctx_message* pCurrentMsg = nullptr;
-		if (!YieldCorutineToCtx(pCorutine, pCtx->GetCtxID(), pCurrentCtx, pCurrentMsg)) {
-			pSession->Close();
-			return;
-		}
+		MACRO_YieldToCtx(pCorutine, pCtx->GetCtxID(),
+			pSession->Close();return;)
 		long lRet = pCtx->OnCtxHttpAsk(pSession, pRequest, response, pCorutine);
 		if (lRet == HTTP_SUCC) {
 			pSession->AsynSendResponse(pRequest, response, smCacheBuf);
@@ -86,7 +78,7 @@ long CCoroutineCtx_Http::OnHttpAsk(RefHttpSession pSession, HttpRequest* pReques
 			pSession->Close();
 			ASSERT(0);
 		}
-	}, 0, nSetParam, pSetParam);
+	}, this, pSession.GetResFunc(), pRequest);
 	return HTTP_ASYNC;
 }
 
@@ -134,7 +126,7 @@ void CCoroutineCtx_Http::OnTimer(CCoroutineCtx* pCtx){
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //! 协程里面调用Bussiness消息
-int CCoroutineCtx_Http::DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg){
+int CCoroutineCtx_Http::DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket){
     switch (nType){
     case Define_Http_Ctx_Bussiness_AddFunc:
         return DispathBussinessMsg_0_AddFunc(pCorutine, nParam, pParam, pRetPacket);
@@ -148,12 +140,7 @@ int CCoroutineCtx_Http::DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t n
 }
 
 long CCoroutineCtx_Http::DispathBussinessMsg_0_AddFunc(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket){
-    IsErrorHapper(nParam == 4, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nParam); return -1);
-	const char* pFunction = (const char*)pParam[0];
-	RegisterDealWithHttpFunction pFunc = (RegisterDealWithHttpFunction)pParam[1];
-	const char* pTrustIP = (const char*)pParam[2];
-	void* pUD = pParam[3];
-
+	MACRO_DispatchCheckParam4(const char* pFunction, (const char*), RegisterDealWithHttpFunction pFunc, (RegisterDealWithHttpFunction), const char* pTrustIP, (const char*), void* pUD, (void*));
 	MapFunctionToPointFunc::iterator iter = m_mapHttpFunctionToPointFunc.find(pFunction);
 	if (iter != m_mapHttpFunctionToPointFunc.end()) {
 		ASSERT(0);
@@ -168,29 +155,18 @@ long CCoroutineCtx_Http::DispathBussinessMsg_0_AddFunc(CCorutinePlus* pCorutine,
 }
 
 long CCoroutineCtx_Http::DispathBussinessMsg_1_DelFunc(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket){
-    IsErrorHapper(nParam == 1, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nParam); return -1);
-	const char* pFunction = (const char*)pParam[0];
+	MACRO_DispatchCheckParam1(const char* pFunction, (const char*));
 	m_mapHttpFunctionToPointFunc.erase(pFunction);
 	return 0;
 }
 
 bool CCFrameHttpRegister(uint32_t nSrcCtxID, uint32_t nHttpCtxID, CCorutinePlus* pCorutine, const char* pFunction, RegisterDealWithHttpFunction func, const char* pTrustIP, void* pUD) {
-	const int nSetParam = 4;
-	void* pSetParam[nSetParam] = { (void*)pFunction, func, (void*)pTrustIP, pUD };
-	int nRetValue = 0;
-	if (!WaitExeCoroutineToCtxBussiness(pCorutine, nSrcCtxID, nHttpCtxID, Define_Http_Ctx_Bussiness_AddFunc, nSetParam, pSetParam, nullptr, nRetValue)) {
-		CCFrameSCBasicLogEventErrorV("%s(%s:%d) error(%s)", __FUNCTION__, __FILE__, __LINE__, pFunction);
-		return false;
-	}
+	MACRO_ExeToCtxParam4(pCorutine, nSrcCtxID, nHttpCtxID, Define_Http_Ctx_Bussiness_AddFunc, (void*)pFunction, func, (void*)pTrustIP, pUD, nullptr,
+						 return false);
 	return true;
 }
 bool CCFrameHttpUnRegister(uint32_t nSrcCtxID, uint32_t nHttpCtxID, CCorutinePlus* pCorutine, const char* pFunction) {
-	const int nSetParam = 1;
-	void* pSetParam[nSetParam] = { (void*)pFunction };
-	int nRetValue = 0;
-	if (!WaitExeCoroutineToCtxBussiness(pCorutine, nSrcCtxID, nHttpCtxID, Define_Http_Ctx_Bussiness_DelFunc, nSetParam, pSetParam, nullptr, nRetValue)) {
-		CCFrameSCBasicLogEventErrorV("%s(%s:%d) error(%s)", __FUNCTION__, __FILE__, __LINE__, pFunction);
-		return false;
-	}
+	MACRO_ExeToCtxParam1(pCorutine, nSrcCtxID, nHttpCtxID, Define_Http_Ctx_Bussiness_DelFunc, (void*)pFunction, nullptr,
+						 return false);
 	return true;
 }

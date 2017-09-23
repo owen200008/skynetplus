@@ -57,20 +57,20 @@ void CCoroutineCtx_NetClientServerCommu::ReleaseCtx(){
     CCoroutineCtx_NetClient::ReleaseCtx();
 }
 
-int32_t CCoroutineCtx_NetClientServerCommu::OnConnect(basiclib::CBasicSessionNetClient* pClient, uint32_t nCode){
+int32_t CCoroutineCtx_NetClientServerCommu::OnConnect(basiclib::CBasicSessionNetNotify* pClient, uint32_t nCode){
     //发送注册
     SendWithSprotoStruct(pClient, m_request, m_ins);
     return BASIC_NET_OK;
 }
 
-int32_t CCoroutineCtx_NetClientServerCommu::OnIdle(basiclib::CBasicSessionNetClient* pSession, uint32_t nIdle){
+int32_t CCoroutineCtx_NetClientServerCommu::OnIdle(basiclib::CBasicSessionNetNotify* pSession, uint32_t nIdle){
     if (nIdle % 15 == 14){
         SendWithSprotoStruct(pSession, m_ping, m_insServer);
     }
     return BASIC_NET_OK;
 }
 
-int32_t CCoroutineCtx_NetClientServerCommu::OnDisconnect(basiclib::CBasicSessionNetClient* pNotify, Net_UInt dwNetCode){
+int32_t CCoroutineCtx_NetClientServerCommu::OnDisconnect(basiclib::CBasicSessionNetNotify* pNotify, Net_UInt dwNetCode){
     ctx_message ctxMsg(0, CCoroutineCtx_NetClientServerCommu::Func_ReceiveCommuDisconnect);
     PushMessage(ctxMsg);
     return BASIC_NET_OK;
@@ -87,7 +87,7 @@ void CCoroutineCtx_NetClientServerCommu::ReceiveDisconnect(ctx_message* pMsg){
 		vtDeleteRequest.push_back(*pRequest);
     });
 	for (auto& deldata : vtDeleteRequest) {
-		WaitResumeCoroutineCtxFail(deldata.m_pCorutine);
+		Ctx_ResumeCoroutine_Fail(deldata.m_pCorutine);
 	}
     if (m_vtRequest.GetMQLength() != 0){
         ASSERT(0);
@@ -99,7 +99,7 @@ void CCoroutineCtx_NetClientServerCommu::ReceiveDisconnect(ctx_message* pMsg){
 		vtDeleteRequestStoreData.push_back(data.second);
     }
 	for (auto& deldata : vtDeleteRequestStoreData) {
-		WaitResumeCoroutineCtxFail(deldata.m_pCorutine);
+		Ctx_ResumeCoroutine_Fail(deldata.m_pCorutine);
 	}
 }
 
@@ -118,7 +118,7 @@ void CCoroutineCtx_NetClientServerCommu::OnTimerCheckTimeout(CCoroutineCtx* pCtx
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //! 协程里面调用Bussiness消息
-int CCoroutineCtx_NetClientServerCommu::DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg){
+int CCoroutineCtx_NetClientServerCommu::DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket){
     switch (nType){
     case DEFINEDISPATCH_CORUTINE_NetClient_CreateMap:
         return DispathBussinessMsg_CreateMap(pCorutine, nParam, pParam, pRetPacket);
@@ -129,7 +129,7 @@ int CCoroutineCtx_NetClientServerCommu::DispathBussinessMsg(CCorutinePlus* pCoru
     case DEFINEDISPATCH_CORUTINE_NetClient_Request:
         return DispathBussinessMsg_Request(pCorutine, nParam, pParam, pRetPacket);
     default:
-        return CCoroutineCtx_NetClient::DispathBussinessMsg(pCorutine, nType, nParam, pParam, pRetPacket, pCurrentMsg);
+        return CCoroutineCtx_NetClient::DispathBussinessMsg(pCorutine, nType, nParam, pParam, pRetPacket);
     }
     return -99;
 }
@@ -139,9 +139,8 @@ void CCoroutineCtx_NetClientServerCommu::Corutine_ReceiveRequest(CCorutinePlus* 
 
 }
 
-long CCoroutineCtx_NetClientServerCommu::DispathBussinessMsg_Receive(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg){
-    IsErrorHapper(nParam == 1, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nParam); return -1);
-    CCorutineStackDataDefault* pDefaultStack = (CCorutineStackDataDefault*)pParam[0];
+long CCoroutineCtx_NetClientServerCommu::DispathBussinessMsg_Receive(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket){
+	MACRO_DispatchCheckParam1(CCorutineStackDataDefault* pDefaultStack, (CCorutineStackDataDefault*));
 
     Net_UInt nMethod = GetDefaultStackMethod(pDefaultStack);
     bool bResponse = ((nMethod & SPROTO_METHOD_TYPE_RESPONSE) != 0);
@@ -150,7 +149,7 @@ long CCoroutineCtx_NetClientServerCommu::DispathBussinessMsg_Receive(CCorutinePl
         switch (nMethod){
         case SPROTO_METHOD_SKYNET_Register:{
             SkynetPlusRegisterResponse response;
-            IsErrorHapper(InsToSprotoStructDefaultStack(response, pDefaultStack),
+            IsErrorHapper(InsToSprotoStructOnly(response, pDefaultStack),
 				ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) parse register error, Close", __FUNCTION__, __FILE__, __LINE__); ErrorClose(); return 0);
             if (response.m_nError != 0){
                 ASSERT(0);
@@ -170,7 +169,7 @@ long CCoroutineCtx_NetClientServerCommu::DispathBussinessMsg_Receive(CCorutinePl
                                            break;
         case SPROTO_METHOD_SKYNET_CreateNameToCtxID:{
             SkynetPlusCreateNameToCtxIDResponse response;
-            IsErrorHapper(InsToSprotoStructDefaultStack(response, pDefaultStack), ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) parse createnametoctxid error, Close", __FUNCTION__, __FILE__, __LINE__); return 0);
+            IsErrorHapper(InsToSprotoStructOnly(response, pDefaultStack), ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) parse createnametoctxid error, Close", __FUNCTION__, __FILE__, __LINE__); return 0);
             if (response.m_nError != 0){
                 ASSERT(0);
                 CCFrameSCBasicLogEventErrorV("%s(%s:%d) createNameToCtxid ret error(%d), Close", __FUNCTION__, __FILE__, __LINE__, response.m_nError);
@@ -180,7 +179,7 @@ long CCoroutineCtx_NetClientServerCommu::DispathBussinessMsg_Receive(CCorutinePl
                                                     break;
         case SPROTO_METHOD_SKYNET_DeleteNameToCtxID:{
             SkynetPlusDeleteNameToCtxIDResponse response;
-            IsErrorHapper(InsToSprotoStructDefaultStack(response, pDefaultStack), ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) parse delnametoctxid error", __FUNCTION__, __FILE__, __LINE__); return 0);
+            IsErrorHapper(InsToSprotoStructOnly(response, pDefaultStack), ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) parse delnametoctxid error", __FUNCTION__, __FILE__, __LINE__); return 0);
             if (response.m_nError != 0){
                 ASSERT(0);
                 CCFrameSCBasicLogEventErrorV("%s(%s:%d) deleteNameToCtxid ret error(%d), Close", __FUNCTION__, __FILE__, __LINE__, response.m_nError);
@@ -188,29 +187,30 @@ long CCoroutineCtx_NetClientServerCommu::DispathBussinessMsg_Receive(CCorutinePl
             }
         }
                                                     break;
-        case SPROTO_METHOD_SKYNET_GetCtxIDByName:{
+        case SPROTO_METHOD_SKYNET_GetCtxIDByName:
+		{
             SkynetPlusGetCtxIDByNameResponse response;
-            IsErrorHapper(InsToSprotoStructDefaultStack(response, pDefaultStack), ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) parse delnametoctxid error, Close", __FUNCTION__, __FILE__, __LINE__); ErrorClose(); return 0);
+            IsErrorHapper(InsToSprotoStructOnly(response, pDefaultStack), ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) parse delnametoctxid error, Close", __FUNCTION__, __FILE__, __LINE__); ErrorClose(); return 0);
             //notify
             KernelRequestStoreData* pRequest = m_vtRequest.FrontData();
             IsErrorHapper(nullptr != pRequest, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) NoRequest Error, Close", __FUNCTION__, __FILE__, __LINE__); ErrorClose(); break);
-            ctx_message sendCtxMsg;
-            sendCtxMsg.m_session = (intptr_t)&response;
-            IsErrorHapper(WaitResumeCoroutineCtx(pRequest->m_pCorutine, this, &sendCtxMsg), ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) WaitResumeCoroutineCtx Fail,Close", __FUNCTION__, __FILE__, __LINE__); ErrorClose(); break);
-        }
-                                                 break;
+			MACRO_ResumeToCtxNormal(pRequest->m_pCorutine, this, CCtx_ThreadPool::GetOrCreateSelfThreadData(),
+									break,
+									&response);
+			break;
+		}
         case SPROTO_METHOD_SKYNETCHILD_Request:{
             Net_CBasicBitstream ins;
             SkynetPlusServerRequestResponse response;
             response.m_pIns = &ins;
-            IsErrorHapper2(InsToSprotoStructDefaultStack(response, pDefaultStack),
+            IsErrorHapper2(InsToSprotoStructOnly(response, pDefaultStack),
                 ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) parse delnametoctxid error", __FUNCTION__, __FILE__, __LINE__),
                 return 0);
             auto& iter = m_mapRequest.find(response.m_head.m_nSession);
             if (iter != m_mapRequest.end()){
-                ctx_message sendCtxMsg;
-                sendCtxMsg.m_session = (intptr_t)&response;
-                IsErrorHapper(WaitResumeCoroutineCtx(iter->second.m_pCorutine, this, &sendCtxMsg), ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) WaitResumeCoroutineCtx Fail,Close", __FUNCTION__, __FILE__, __LINE__); ErrorClose(); break);
+				MACRO_ResumeToCtxNormal(iter->second.m_pCorutine, this, CCtx_ThreadPool::GetOrCreateSelfThreadData(),
+										break,
+										&response);
             }
             else{
                 CCFrameSCBasicLogEventErrorV("%s(%s:%d) no sessionid find %d", __FUNCTION__, __FILE__, __LINE__, response.m_head.m_nSession);
@@ -229,11 +229,10 @@ long CCoroutineCtx_NetClientServerCommu::DispathBussinessMsg_Receive(CCorutinePl
             SkynetPlusServerRequestTransfer request;
             request.m_pIns = &childRequest;
             SkynetPlusServerRequestTransferResponse response;
-            IsErrorHapper2(InsToSprotoStructDefaultStack(request, pDefaultStack),
+            IsErrorHapper2(InsToSprotoStructDefaultStack(request, pDefaultStack, response),
                 ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) parse ServerRequest error", __FUNCTION__, __FILE__, __LINE__),
                 return 0);
-            //拷贝session,ctxid
-            response.m_head.m_nSession = request.m_head.m_nSession;
+            //拷贝ctxid
             response.m_nCtxID = request.m_nCtxID;
             do{
 #ifdef _DEBUG
@@ -262,13 +261,10 @@ long CCoroutineCtx_NetClientServerCommu::DispathBussinessMsg_Receive(CCorutinePl
                         return false);
                     //去本机ctxID
                     uint32_t nDstCtxID = realRequest.m_request.m_nDstCtxID & HANDLE_ID_ALLOCATE_LOG;
-                    CCoroutineCtx* pCurrentCtx = nullptr;
-                    ctx_message* pCurrentMsg = nullptr;
                     int nRetValue = 0;
                     bool bRetSerializeResponse = funcData.m_responseSerialize([&](void* pRetPacket)->bool{
-						IsErrorHapper2(WaitExeCoroutineToCtxBussiness(pCorutine, m_ctxID, nDstCtxID, realRequest.m_request.m_nType, nParam, pParam, pRetPacket, nRetValue),
-							ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) WaitExeCoroutineToCtxBussiness error remotectx(%x) type(%d)", __FUNCTION__, __FILE__, __LINE__, realRequest.m_request.m_nDstCtxID, realRequest.m_request.m_nType),
-							return false);
+						MACRO_ExeToCtx(pCorutine, m_ctxID, nDstCtxID, realRequest.m_request.m_nType, nParam, pParam, pRetPacket,
+									   return false);
                         return true;
                     }, response.m_ins);
                     IsErrorHapper2(nRetValue == 0 && bRetSerializeResponse,
@@ -296,76 +292,65 @@ long CCoroutineCtx_NetClientServerCommu::DispathBussinessMsg_Receive(CCorutinePl
 }
 
 long CCoroutineCtx_NetClientServerCommu::DispathBussinessMsg_CreateMap(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket){
-    IsErrorHapper(nParam == 2, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nParam); return -1);
-    if (!IsTransmit())
-        return -2;
-    const char* pCtxName = (const char*)pParam[0];
-    uint32_t uCtxID = *(uint32_t*)pParam[1];
+	MACRO_DispatchCheckParam2(const char* pCtxName, (const char*), uint32_t uCtxID, *(uint32_t*))
     auto& iter = m_map.find(pCtxName);
     if (iter != m_map.end()){
         CCFrameSCBasicLogEventErrorV("%s(%s:%d) CreateNameToCtxID exist name %s(%d:%d)", __FUNCTION__, __FILE__, __LINE__, pCtxName, uCtxID, iter->second);
     }
     m_map[pCtxName] = uCtxID;
-    SkynetPlusCreateNameToCtxID request;
-    request.m_mapNameToCtxID[pCtxName] = uCtxID;
-    SendWithSprotoStruct(m_pClient, request, m_ins);
+	if(IsTransmit()){
+		SkynetPlusCreateNameToCtxID request;
+		request.m_mapNameToCtxID[pCtxName] = uCtxID;
+		SendWithSprotoStruct(m_pClient, request, m_ins);
+	}
     return 0;
 }
 long CCoroutineCtx_NetClientServerCommu::DispathBussinessMsg_DelMap(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket){
-    IsErrorHapper(nParam == 1, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nParam); return -1);
-    if (!IsTransmit())
-        return -2;
-    const char* pCtxName = (const char*)pParam[0];
+	MACRO_DispatchCheckParam1(const char* pCtxName, (const char*))
     auto& iter = m_map.find(pCtxName);
     if (iter == m_map.end()){
         CCFrameSCBasicLogEventErrorV("%s(%s:%d) DeleteNameToCtxID no exist name %s", __FUNCTION__, __FILE__, __LINE__, pCtxName);
         return 0;
     }
     m_map.erase(iter);
-    SkynetPlusDeleteNameToCtxID request;
-    request.m_strName = pCtxName;
-    SendWithSprotoStruct(m_pClient, request, m_ins);
+	if(IsTransmit()){
+		SkynetPlusDeleteNameToCtxID request;
+		request.m_strName = pCtxName;
+		SendWithSprotoStruct(m_pClient, request, m_ins);
+	}
     return 0;
 }
 
 long CCoroutineCtx_NetClientServerCommu::DispathBussinessMsg_GetMap(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket){
-    IsErrorHapper(nParam == 1, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nParam); return -1);
-    const char* pCtxName = (const char*)pParam[0];
+	MACRO_DispatchCheckParam1(const char* pCtxName, (const char*));
     if (!IsTransmit())
-        return -2;
-    CCoroutineCtx* pCurrentCtx = nullptr;
-    ctx_message* pCurrentMsg = nullptr;
+        return DEFINECTX_RET_TYPE_NoNet;
     //! 保存
     CKernelMsgQueueRequestMgr requestMgr(m_vtRequest, pCorutine);
     SkynetPlusGetCtxIDByName request;
     request.m_strName = pCtxName;
     SendWithSprotoStruct(m_pClient, request, m_ins);
     //截断协程由子协程唤醒(认为结束了 自己保存)
-    if (!YieldCorutineToCtx(pCorutine, 0, pCurrentCtx, pCurrentMsg)){
-        //代表进来的时候sourcectxid已经不存在了
-        return -4;
-    }
+	MACRO_YieldToCtx(pCorutine, 0,
+					 return DEFINECTX_RET_TYPE_COROUTINEERR);
     SkynetPlusGetCtxIDByNameResponse* pResponse = (SkynetPlusGetCtxIDByNameResponse*)pRetPacket;
-    *pResponse = *(SkynetPlusGetCtxIDByNameResponse*)pCurrentMsg->m_session;
+	MACRO_GetYieldParam1(SkynetPlusGetCtxIDByNameResponse* pGetResponse, SkynetPlusGetCtxIDByNameResponse);
+    *pResponse = *pGetResponse;
     return 0;
 }
 
 long CCoroutineCtx_NetClientServerCommu::DispathBussinessMsg_Request(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket){
-    IsErrorHapper(nParam == 4, ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) paramerror(%d)", __FUNCTION__, __FILE__, __LINE__, nParam); return -1);
+	MACRO_DispatchCheckParam4(uint32_t nDstCtxID, *(uint32_t*), uint32_t nType, *(uint32_t*), int nRequestParam, *(int*), void** pRequestParam, (void**));
     if (!IsTransmit())
-        return -2;
-    uint32_t nDstCtxID = *(uint32_t*)pParam[0];
-    uint32_t nType = *(uint32_t*)pParam[1];
-    int nRequestParam = *(int*)pParam[2];
-    void** pRequestParam = (void**)pParam[3];
+        return DEFINECTX_RET_TYPE_NoNet;
 
     auto& iterCtxMap = m_mapRegister.find(nDstCtxID);
     if (iterCtxMap == m_mapRegister.end())
-        return 1;
+        return DEFINECTX_RET_TYPE_NoCtxID;
     MapSerialize& mapSerialize = iterCtxMap->second;
     auto& iter = mapSerialize.find(nType);
     if (iter == mapSerialize.end())
-        return 2;
+        return DEFINECTX_RET_TYPE_NoSeriaze;
     ServerCommuSerialize& funcData = iter->second;
     
     SkynetPlusServerRequest request;
@@ -379,18 +364,15 @@ long CCoroutineCtx_NetClientServerCommu::DispathBussinessMsg_Request(CCorutinePl
     //发送
     SendWithSprotoStruct(m_pClient, request, m_ins);
 
-    CCoroutineCtx* pCurrentCtx = nullptr;
-    ctx_message* pCurrentMsg = nullptr;
     //截断协程由子协程唤醒(认为结束了 自己保存)
-    if (!YieldCorutineToCtx(pCorutine, 0, pCurrentCtx, pCurrentMsg)){
-        //代表进来的时候sourcectxid已经不存在了
-        return -4;
-    }
-    SkynetPlusServerRequestResponse* pResponse = (SkynetPlusServerRequestResponse*)pCurrentMsg->m_session;
-    IsErrorHapper(pResponse->m_nError == 0, return 4);
+	MACRO_YieldToCtx(pCorutine, 0, 
+					 return DEFINECTX_RET_TYPE_COROUTINEERR);
+	MACRO_GetYieldParam1(SkynetPlusServerRequestResponse* pResponse, SkynetPlusServerRequestResponse);
+    IsErrorHapper(pResponse->m_nError == 0, 
+				  return DEFINECTX_RET_TYPE_NetResponseError);
     IsErrorHapper(funcData.m_responseUnSerialize(*pResponse->m_pIns, pRetPacket), 
-        ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) m_responseUnSerialize error ctxid(%x) type(%d)", __FUNCTION__, __FILE__, __LINE__, nDstCtxID, nType); return 5);
-    return 0;
+        ASSERT(0); CCFrameSCBasicLogEventErrorV("%s(%s:%d) m_responseUnSerialize error ctxid(%x) type(%d)", __FUNCTION__, __FILE__, __LINE__, nDstCtxID, nType); return DEFINECTX_RET_TYPE_SeriazeError);
+    return DEFINECTX_RET_TYPE_SUCCESS;
 }
 
 

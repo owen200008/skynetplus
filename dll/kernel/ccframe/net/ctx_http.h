@@ -81,7 +81,7 @@ public:
 	lua_State* GetLuaState() { return m_L; }
 
     //! 协程里面调用Bussiness消息
-    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg);
+    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket);
     ////////////////////////////////////////////////////////////////////////////////////////
     //业务类, 全部使用静态函数, 这样可以保证动态库函数可以替换,做到动态更新
     static void OnTimer(CCoroutineCtx* pCtx);

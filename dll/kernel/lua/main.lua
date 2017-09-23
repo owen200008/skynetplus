@@ -28,6 +28,8 @@ if sprotofilename then
 		local sprotocode = assert(f:read "*a")
 		parseData = parseData..sprotocode
 		f:close()
+		--保证统一
+		sprotoparser.parsetocpp(parseData, lastName, nil)
 	end
     if sprotostoreluafile then
         sprotostoreluafile = kernelskyentplus.modulepath()..sprotostoreluafile

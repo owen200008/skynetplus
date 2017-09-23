@@ -17,7 +17,7 @@ public:
     virtual void ReleaseCtx();
 
     //! 协程里面调用Bussiness消息
-    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg);
+    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket);
 
 	//! 获取ctx
 	static uint32_t GetLogCtxID();
@@ -31,8 +31,6 @@ public:
 	////////////////////////////////////////////////////////////////////////////////////////
 	//业务类, 全部使用静态函数
     static void OnTimerBasicLog(CCoroutineCtx* pCtx);
-protected:
-    static void OnLogEventCtx(CCorutinePlus* pCorutine);
 protected:
 	bool	m_bCanExit;
 };

@@ -9,8 +9,7 @@
 #pragma warning (disable: 4251)
 #pragma warning (disable: 4275)
 
-#define DEFINEDISPATCH_CORUTINE_InterationCenterServerSessionCtx_RequestPacket      0 
-#define DEFINEDISPATCH_CORUTINE_InterationCenterServerSessionCtx_WakeUp				1
+#define DEFINEDISPATCH_CORUTINE_InterationCenterServerSessionCtx_WakeUp				1000
 
 //revert
 #define ServerSessionRevert_Key_RemoteID            0
@@ -28,13 +27,16 @@ public:
     virtual void ReleaseCtx();
 
     //! 协程里面调用Bussiness消息
-    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg);
+    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket);
 
     ////////////////////////////////////////////////////////////////////////////////////////
     //业务类, 全部使用静态函数
     static void OnTimer(CCoroutineCtx* pCtx);
 protected:
-    long DispathBussinessMsg_RequestPacket(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket);
+	virtual long DispathBussinessMsg_0_Init(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket);
+	virtual long DispathBussinessMsg_1_SessionRelease(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket);
+	virtual long DispathBussinessMsg_2_ReceiveData(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket);
+
 	long DispathBussinessMsg_Wakeup(CCorutinePlus* pCorutine, int nParam, void** pParam, void* pRetPacket);
 protected:
     //ctx内部安全

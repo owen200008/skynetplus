@@ -59,7 +59,7 @@ CCCFrameDefaultFilter::CCCFrameDefaultFilter(DWORD dwMaxLength){
 CCCFrameDefaultFilter::~CCCFrameDefaultFilter(){
 }
 
-Net_Int CCCFrameDefaultFilter::OnPreReceive(const char *pszData, Net_Int cbData, basiclib::CBasicBitstream& buf, basiclib::CBasicSessionNetClient* pNetSession){
+Net_Int CCCFrameDefaultFilter::OnPreReceive(const char *pszData, Net_Int cbData, basiclib::CBasicBitstream& buf, basiclib::CBasicSessionNetNotify* pNetSession){
     if (0 == cbData || NULL == pszData){
     }
     else{
@@ -82,7 +82,7 @@ Net_Int CCCFrameDefaultFilter::OnPreReceive(const char *pszData, Net_Int cbData,
     return lRet == NETCLIENT_LOCATION_HEADER_FIND ? PACK_FILTER_NEXT : PACK_FILTER_HANDLED;
 }
 
-Net_Int CCCFrameDefaultFilter::OnPreSend(const char *pszData, Net_Int cbData, Net_UInt dwFlag, basiclib::SendDataToSendThread& buf){
+Net_Int CCCFrameDefaultFilter::OnPreSend(const char *pszData, Net_Int cbData, Net_UInt dwFlag, basiclib::SendBufferCacheMgr& buf){
     uint32_t nLength = cbData + 4;
     char* pBuf = buf.ResetDataLength(nLength);
     char* pPoint = pBuf;

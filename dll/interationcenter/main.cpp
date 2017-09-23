@@ -2,6 +2,7 @@
 #include "dll/kernel/kernel_server.h"
 #include "interationcenter.h"
 #include "interationcenterserversessionctx.h"
+#include "ctx_gateinteration.h"
 
 #define DLL_VERSION			"1.0.0"
 
@@ -21,17 +22,9 @@ public:
 //全局变量
 CMainInheritGlobalParam m_globalParam;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-extern "C" _SKYNET_BUSSINESS_DLL_API bool InitForKernel(CKernelLoadDll* pDll, bool bReplace, CInheritGlobalParam*& pInitParam)
-{
+extern "C" _SKYNET_BUSSINESS_DLL_API bool InitForKernel(CKernelLoadDll* pDll, CInheritGlobalParam*& pInitParam){
     //赋值全局参数
     pInitParam = &m_globalParam;
-
-    //注册模板,默认情况下不需要替换模板
-    if (!bReplace){
-        CDllRegisterCtxTemplateMgr& ctxInterface = CCtx_ThreadPool::GetThreadPool()->GetCtxTemplateRegister();
-        ctxInterface.Register(CInterationCenterCtx::CreateTemplate, ReleaseTemplate);
-        ctxInterface.Register(CInterationCenterServerSessionCtx::CreateTemplate, ReleaseTemplate);
-    }
     return true;
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

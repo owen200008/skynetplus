@@ -48,13 +48,13 @@ int luaopen_kernel(lua_State *L)
 	ExportBasiclibClassToLua(L);
 	kaguya::State state(L);
 	
-	state["CMoniFrameServerSession"].setClass(kaguya::UserdataMetatable<CMoniFrameServerSession>()
-		.setConstructors<CMoniFrameServerSession(bool)>()
-		.addFunction("SendForLua", &CMoniFrameServerSession::SendForLua)
-		.addFunction("GetUniqueID", &CMoniFrameServerSession::GetUniqueID)
-		.addFunction("BindSendCallback", &CMoniFrameServerSession::BindSendCallback)
-		.addStaticFunction("SendBuffer", [](CMoniFrameServerSession* pSession, std::string& strData) { {
-				return pSession->Send((void*)strData.c_str(), strData.length());
+	state["CMoniFrameServerSessionLua"].setClass(kaguya::UserdataMetatable<CMoniFrameServerSessionLua>()
+		.setConstructors<CMoniFrameServerSessionLua()>()
+		.addFunction("SendForLua", &CMoniFrameServerSessionLua::SendForLua)
+		.addFunction("GetUniqueID", &CMoniFrameServerSessionLua::GetUniqueID)
+		.addFunction("BindSendCallback", &CMoniFrameServerSessionLua::BindSendCallback)
+		.addStaticFunction("SendBuffer", [](CMoniFrameServerSessionLua* pSession, std::string& strData) { {
+				return pSession->SendData((void*)strData.c_str(), strData.length());
 			}})
 	);
 	

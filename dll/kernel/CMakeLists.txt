@@ -35,13 +35,13 @@ if(MSVC)
 	include_directories(${BasicLibPath}/3rd/libevent/build/include)
 	set(RunProjectCXX_FLAGS "${RunProjectCXX_FLAGS} /MP")
 	set(RunProjectC_FLAGS "${RunProjectC_FLAGS} /MP")
-	add_definitions(-DUNICODE -D_UNICODE -D__BASICWINDOWS -DBASIC_DLL_IMPORTS)
+	add_definitions(-DUNICODE -D_UNICODE -D__BASICWINDOWS -DBASIC_DLL_IMPORTS  -DKAGUYA_SUPPORT_MULTIPLE_SHARED_LIBRARY)
 	set(RunProjectLinks ${RunProjectLinks} ${BasicLibPath}/libs/FLzlib13.lib 
 		${BasicLibPath}/3rd/libevent/build/lib/Debug/event.lib
 		${BasicLibPath}/libs/lua53.lib)
 else()
 	set(RunProjectCXX_FLAGS "${RunProjectCXX_FLAGS} --std=c++11")
-	add_definitions(-DLINUX -D__LINUX -DBASIC_DLL_IMPORTS)
+	add_definitions(-DLINUX -D__LINUX -DBASIC_DLL_IMPORTS  -DKAGUYA_SUPPORT_MULTIPLE_SHARED_LIBRARY)
 	set(RunProjectLinks ${BasicLibPath}/libs/liblua.a
 		${BasicLibPath}/3rd/libevent/.libs/libevent.a
 		)
@@ -98,10 +98,6 @@ set(RunProject_SOURCES
     ${PROJECT_SOURCE_DIR}/kerneltolua.h
     ${PROJECT_SOURCE_DIR}/kernel_head.h
     ${PROJECT_SOURCE_DIR}/kernel_server.h
-	${BasicLibPath}/src/scbasic/net/net.h
-	${BasicLibPath}/src/scbasic/net/sendbuffer.h
-	${BasicLibPath}/src/scbasic/net/net.cpp
-	${BasicLibPath}/src/scbasic/net/sendbuffer.cpp
 	${BasicLibPath}/src/scbasic/commu/basicclient.cpp
     ${BasicLibPath}/src/scbasic/commu/ipverify.cpp
     ${BasicLibPath}/src/scbasic/commu/servertemplate.cpp
@@ -123,6 +119,8 @@ set(RunProject_SOURCES
     ${PROJECT_SOURCE_DIR}/ccframe/net/ccframedefaultfilter.cpp
     ${PROJECT_SOURCE_DIR}/ccframe/net/ccframeserver.cpp
     ${PROJECT_SOURCE_DIR}/ccframe/net/ccframeserver_frame.cpp
+	${PROJECT_SOURCE_DIR}/ccframe/net/ctx_gate.cpp
+	${PROJECT_SOURCE_DIR}/ccframe/net/ctx_gate.h
     ${PROJECT_SOURCE_DIR}/ccframe/net/ctx_ccframeserversession.cpp
     ${PROJECT_SOURCE_DIR}/ccframe/net/ctx_mysql.cpp
     ${PROJECT_SOURCE_DIR}/ccframe/net/ctx_netclient.cpp
@@ -130,6 +128,10 @@ set(RunProject_SOURCES
     ${PROJECT_SOURCE_DIR}/ccframe/net/ctx_redis.cpp
     ${PROJECT_SOURCE_DIR}/ccframe/public/kernelrequeststoredata.cpp
     ${PROJECT_SOURCE_DIR}/ccframe/state/ctx_threadstate.cpp
+	${PROJECT_SOURCE_DIR}/ccframe/paiming/ctx_tiaozhanpaiming.h
+	${PROJECT_SOURCE_DIR}/ccframe/paiming/ctx_tiaozhanpaiming.cpp
+	${PROJECT_SOURCE_DIR}/ccframe/paiming/ctx_tiaozhanpaiming_record.h
+	${PROJECT_SOURCE_DIR}/ccframe/paiming/ctx_tiaozhanpaiming_record.cpp
     ${PROJECT_SOURCE_DIR}/kerneltolua.cpp
     ${PROJECT_SOURCE_DIR}/kernel_server.cpp
     ${PROJECT_SOURCE_DIR}/kernel_server_http.cpp

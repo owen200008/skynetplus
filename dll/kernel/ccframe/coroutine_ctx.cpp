@@ -9,15 +9,13 @@ extern "C" {
 //////////////////////////////////////////////////////////////////////////////
 extern CCoroutineCtxHandle* m_pHandle;
 uint32_t CCoroutineCtx::m_nTotalCtx = 0;
-WakeUpCorutineType g_wakeUpTypeSuccess = WakeUpCorutineType_Success;
 uint32_t& CCoroutineCtx::GetTotalCreateCtx()
 { 
 	return m_nTotalCtx; 
 }
 
 //////////////////////////////////////////////////////////////////////////////
-CCoroutineCtx::CCoroutineCtx(const char* pName, const char* pClassName)
-{
+CCoroutineCtx::CCoroutineCtx(const char* pName, const char* pClassName){
 	m_bRelease = false;
 	m_bFixCtxID = 0;
     m_bUseForServer = false;
@@ -32,15 +30,13 @@ CCoroutineCtx::CCoroutineCtx(const char* pName, const char* pClassName)
 	basiclib::BasicInterlockedIncrement((LONG*)&m_nTotalCtx);
 }
 
-CCoroutineCtx::~CCoroutineCtx()
-{
+CCoroutineCtx::~CCoroutineCtx(){
 	ASSERT(m_bRelease == true || CCtx_ThreadPool::GetThreadPool()->GetSetClose());
 	basiclib::BasicInterlockedDecrement((LONG*)&m_nTotalCtx);
 }
 
 //初始化
-int CCoroutineCtx::InitCtx(CMQMgr* pMQMgr, const std::function<const char*(InitGetParamType, const char* pKey, const char* pDefault)>& func)
-{
+int CCoroutineCtx::InitCtx(CMQMgr* pMQMgr, const std::function<const char*(InitGetParamType, const char* pKey, const char* pDefault)>& func){
 	if (m_ctxID != 0)
 		return 1;
     //默认回调一次初始化在调用加入handle之前
@@ -53,12 +49,17 @@ int CCoroutineCtx::InitCtx(CMQMgr* pMQMgr, const std::function<const char*(InitG
 	return 0;
 }
 
-void CCoroutineCtx::ReleaseCtx()
-{
+void CCoroutineCtx::ReleaseCtx(){
 	m_bRelease = true;
 	if (m_ctxID != 0){
 		m_ctxMsgQueue.PushToMQMgr();
 		return;
+	}
+}
+//! 强制push到全局队列
+void CCoroutineCtx::PushGlobalQueue(){
+	if(m_bRelease == false && m_ctxID != 0){
+		m_ctxMsgQueue.PushToMQMgr();
 	}
 }
 
@@ -89,10 +90,8 @@ void CCoroutineCtx::PushMessage(ctx_message& msg)
 }
 
 //! 分配任务
-void CCoroutineCtx::DispatchMsg(ctx_message& msg)
-{
-	switch (msg.m_nType)
-	{
+bool CCoroutineCtx::DispatchMsg(ctx_message& msg, CCorutinePlusThreadData* pCurrentData){
+	switch (msg.m_nType){
 		case CTXMESSAGE_TYPE_RUNFUNC:
 		{
 			pRunFuncCtxMessageCallback pFunc = (pRunFuncCtxMessageCallback)msg.m_pFunc;
@@ -101,7 +100,8 @@ void CCoroutineCtx::DispatchMsg(ctx_message& msg)
 		break;
 		case CTXMESSAGE_TYPE_RUNCOROUTINE:
 		{
-            WaitResumeCoroutineCtx((CCorutinePlus*)msg.m_pFunc, this, &msg);
+			Ctx_ResumeCoroutine((CCorutinePlus*)msg.m_pFunc, this, pCurrentData);
+
 		}
 		break;
 		case CTXMESSAGE_TYPE_ONTIMER:
@@ -111,11 +111,12 @@ void CCoroutineCtx::DispatchMsg(ctx_message& msg)
 		}
         break;
 	}
+	return true;
 }
 
 //! 协程里面调用Bussiness消息
-int CCoroutineCtx::DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg){
-    return 0;
+int CCoroutineCtx::DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket){
+    return DEFINECTX_RET_TYPE_SUCCESS;
 }
 
 //获取状态
@@ -125,96 +126,94 @@ void CCoroutineCtx::GetState(basiclib::CBasicSmartBuffer& smBuf){
     smBuf.AppendString(szBuf);
 }
 
+void DebugInterfaceCorutine(CCorutinePlus* pCorutine){
+	CCoroutineCtx* pCtx = pCorutine->GetParamPoint<CCoroutineCtx>(0);
+	uint32_t nType = pCorutine->GetParam<uint32_t>(1);
+	MACRO_ExeToCtx(pCorutine, 0, pCtx->GetCtxID(), nType, 0, nullptr, nullptr,
+				   return);
+}
 //! 测试接口
 bool CCoroutineCtx::DebugInterface(const char* pDebugInterface, uint32_t nType, lua_State* L) {
 	//默认发送给自己
 	int argc = lua_gettop(L);
 	if (argc == 3) {
-		const int nSetParam = 2;
-		void* pSetParam[nSetParam] = { this, &nType };
-		CreateResumeCoroutineCtx([](CCorutinePlus* pCorutine)->void {
-			int nGetParamCount = 0;
-			void** pGetParam = GetCoroutineCtxParamInfo(pCorutine, nGetParamCount);
-			CCoroutineCtx* pCtx = (CCoroutineCtx*)pGetParam[0];
-			uint32_t nType = *(uint32_t*)pGetParam[1];
-			int nRetValue = 0;
-			IsErrorHapper(WaitExeCoroutineToCtxBussiness(pCorutine, pCtx->GetCtxID(), pCtx->GetCtxID(), nType, 0, nullptr, nullptr, nRetValue),
-				CCFrameSCBasicLogEventErrorV("%s(%s:%d) WaitExeCoroutineToCtxBussiness error", __FUNCTION__, __FILE__, __LINE__));
-		}, 0, 0, nullptr);
+		Ctx_CreateCoroutine(0, DebugInterfaceCorutine, this, &nType);
 		return true;
 	}
 	return false;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-template<class... _Types>
-bool TemplateResumeCoroutineCtx(CCorutinePlus* pCorutine, CCorutinePlusThreadData* pCurrentData, uint32_t nSourceCtxID, _Types&&... _Args){
-    if (pCorutine->Resume(pCurrentData->GetCorutinePlusPool(), g_wakeUpTypeSuccess, std::forward<_Types>(_Args)...) == CoroutineState_Suspend){
-        uint32_t nNextCtxID = pCorutine->GetYieldParam<uint32_t>(0);
-        if (nNextCtxID != 0){
-            ctx_message sendmsg(nSourceCtxID, pCorutine);
-            if (CCoroutineCtx::PushMessageByID(nNextCtxID, sendmsg)){
-                return true;
-            }
-            CCFrameSCBasicLogEventErrorV("%s(%s:%d) SendNext NoFind SourceCtx(%x) NextCtx(%x)", __FUNCTION__, __FILE__, __LINE__, nSourceCtxID, nNextCtxID);
-            //唤醒返回执行失败
-			WaitResumeCoroutineCtxFail(pCorutine);
-			return false;
-        }
-        else{
-            return true;
-        }
-        return false;
-    }
-    return true;
+bool Ctx_DispathCoroutine(CCorutinePlus* pCorutine, uint32_t nSrcCtxID, uint32_t nDstCtxID){
+	ctx_message sendmsg(nSrcCtxID, pCorutine);
+	if(CCoroutineCtx::PushMessageByID(nDstCtxID, sendmsg)){
+		return true;
+	}
+	CCFrameSCBasicLogEventErrorV("%s(%s:%d) SendNext NoFind SourceCtx(%x) NextCtx(%x)", __FUNCTION__, __FILE__, __LINE__, nSrcCtxID, nDstCtxID);
+	//唤醒返回执行失败
+	Ctx_ResumeCoroutine_Fail(pCorutine);
+	return false;
 }
 
-bool CreateResumeCoroutineCtx(coroutine_func func, uint32_t nSourceCtxID, int nParam, void* pParam){
-	CCorutinePlusThreadData* pCurrentData = CCtx_ThreadPool::GetOrCreateSelfThreadData();
-    CCorutinePlus* pCorutine = pCurrentData->GetCorutinePlusPool()->GetCorutine();
-    pCorutine->ReInit(func);
-    return TemplateResumeCoroutineCtx(pCorutine, pCurrentData, nSourceCtxID, nParam, pParam);
+bool Ctx_ResumeCoroutine(CCorutinePlus* pCorutine, CCoroutineCtx* pCtx, CCorutinePlusThreadData* pCurrentData){
+	static WakeUpCorutineType wakeUpType = WakeUpCorutineType_Success;
+	//占有当前资源
+	pCorutine->SetCurrentCtx(pCtx);
+	if(pCorutine->Resume(pCurrentData->GetCorutinePlusPool(), &wakeUpType) == CoroutineState_Suspend){
+		//释放当前资源
+		pCorutine->SetCurrentCtx(nullptr);
+		uint32_t nNextCtxID = pCorutine->GetParam<uint32_t>(0);
+		if(nNextCtxID != 0){
+			return Ctx_DispathCoroutine(pCorutine, pCtx->GetCtxID(), nNextCtxID);
+		}
+	}
+	return true;
 }
 
-bool WaitResumeCoroutineCtx(CCorutinePlus* pCorutine, CCoroutineCtx* pCtx, ctx_message* pMsg){
-    return TemplateResumeCoroutineCtx(pCorutine, CCtx_ThreadPool::GetOrCreateSelfThreadData(), pCtx->GetCtxID(), pCtx, pMsg);
+bool Ctx_YieldCoroutine(CCorutinePlus* pCorutine, uint32_t nNextCtxID){
+	if(pCorutine->IsSameCurrentCtx(nNextCtxID)){
+		return true;
+	}
+	pCorutine->YieldCorutine(&nNextCtxID);
+	WakeUpCorutineType wakeUpType = pCorutine->GetParam<WakeUpCorutineType>(0);
+	if(wakeUpType != WakeUpCorutineType_Success){
+		return false;
+	}
+	return true;
+}
+
+int Ctx_ExeCoroutine(CCorutinePlus* pCorutine, uint32_t nSourceCtxID, uint32_t nDstCtxID, uint32_t nType, int nParam, void** pParam, void* pRetPacket){
+	//判断是否是远程ctxid
+	if(m_pHandle->IsRemoteServerCtxID(nDstCtxID)){
+		MACRO_YieldToCtx(pCorutine, m_pHandle->GetServerCommuCtxID(),
+						 return DEFINECTX_RET_TYPE_COROUTINEERR;);
+		const int nSetParam = 4;
+		void* pSetParam[nSetParam] = { &nDstCtxID, &nType, &nParam, pParam };
+		return pCorutine->GetCurrentCtx()->DispathBussinessMsg(pCorutine, DEFINEDISPATCH_CORUTINE_NetClient_Request, nSetParam, pSetParam, pRetPacket);
+	}
+	else{
+		MACRO_YieldToCtx(pCorutine, nDstCtxID,
+						 return DEFINECTX_RET_TYPE_COROUTINEERR;);
+		return pCorutine->GetCurrentCtx()->DispathBussinessMsg(pCorutine, nType, nParam, pParam, pRetPacket);
+	}
+	if(nSourceCtxID != 0){
+		MACRO_YieldToCtx(pCorutine, nSourceCtxID,
+						 return DEFINECTX_RET_TYPE_COROUTINEERR;);
+	}
+	return DEFINECTX_RET_TYPE_SUCCESS;
 }
 
 //! 唤醒协程执行失败
-void WaitResumeCoroutineCtxFail(CCorutinePlus* pCorutine){
+void Ctx_ResumeCoroutine_Fail(CCorutinePlus* pCorutine){
 	CCorutinePlusThreadData* pCurrentData = CCtx_ThreadPool::GetOrCreateSelfThreadData();
     WakeUpCorutineType wakeUpType = WakeUpCorutineType_Fail;
-	pCorutine->Resume(pCurrentData->GetCorutinePlusPool(), wakeUpType);
+	pCorutine->Resume(pCurrentData->GetCorutinePlusPool(), &wakeUpType);
 }
 
 void RegisterSerializeAndUnSerialize(uint32_t nDstCtxID, uint32_t nType, ServerCommuSerialize& func, bool bSelfCtx){
 	m_pHandle->RegisterSerializeAndUnSerialize(nDstCtxID, nType, func, bSelfCtx);
 }
 
-
-bool WaitExeCoroutineToCtxBussiness(CCorutinePlus* pCorutine, uint32_t nSourceCtxID, uint32_t nDstCtxID, uint32_t nType, int nParam, void** pParam, void* pRetPacket, int& nRetValue){
-    CCoroutineCtx* pCurrentCtx = nullptr;
-    ctx_message* pCurrentMsg = nullptr;
-    //判断是否是远程ctxid
-    if (m_pHandle->IsRemoteServerCtxID(nDstCtxID)){
-        if (!YieldCorutineToCtx(pCorutine, m_pHandle->GetServerCommuCtxID(), pCurrentCtx, pCurrentMsg))
-            return false;
-        const int nSetParam = 4;
-        void* pSetParam[nSetParam] = { &nDstCtxID, &nType, &nParam, pParam };
-        nRetValue = pCurrentCtx->DispathBussinessMsg(pCorutine, DEFINEDISPATCH_CORUTINE_NetClient_Request, nSetParam, pSetParam, pRetPacket, pCurrentMsg);
-    }
-    else{
-		if (!YieldCorutineToCtx(pCorutine, nDstCtxID, pCurrentCtx, pCurrentMsg)) {
-			return false;
-		}
-        nRetValue = pCurrentCtx->DispathBussinessMsg(pCorutine, nType, nParam, pParam, pRetPacket, pCurrentMsg);
-    }
-    if (nSourceCtxID != 0){
-        if (!YieldCorutineToCtx(pCorutine, nSourceCtxID, pCurrentCtx, pCurrentMsg))
-            return false;
-    }
-    return true;
-}
 
 bool CCoroutineCtx::YieldAndResumeSelf(CCorutinePlus* pCorutine) {
 #ifdef _DEBUG
@@ -230,37 +229,12 @@ bool CCoroutineCtx::YieldAndResumeSelf(CCorutinePlus* pCorutine) {
 	}
 #endif
 	uint32_t nNextCtxID = 0;
-	pCorutine->YieldCorutine(nNextCtxID);
-	WakeUpCorutineType wakeUpType = pCorutine->GetResumeParam<WakeUpCorutineType>(0);
+	pCorutine->YieldCorutine(&nNextCtxID);
+	WakeUpCorutineType wakeUpType = pCorutine->GetParam<WakeUpCorutineType>(0);
 	if (wakeUpType != WakeUpCorutineType_Success) {
 		return false;
 	}
 	return true;
-}
-
-//yield协程
-bool YieldCorutineToCtx(CCorutinePlus* pCorutine, uint32_t nNextCtxID, CCoroutineCtx*& pCtx, ctx_message*& pMsg){
-#ifdef _DEBUG
-	CCorutinePlusThreadData* pCheckCurrentData = CCtx_ThreadPool::GetOrCreateSelfThreadData();
-	if (pCorutine->GetRunPool() != pCheckCurrentData->GetCorutinePlusPool()) {
-		CCFrameSCBasicLogEventErrorV("%s(%s:%d) pCorutine->GetRunPool() != pCheckCurrentData->GetCorutinePlusPool()", __FUNCTION__, __FILE__, __LINE__);
-		return false;
-	}
-#endif
-    pCorutine->YieldCorutine(nNextCtxID);
-    WakeUpCorutineType wakeUpType = pCorutine->GetResumeParam<WakeUpCorutineType>(0);
-    if (wakeUpType != WakeUpCorutineType_Success){
-        return false;
-    }
-    pCtx = pCorutine->GetResumeParam<CCoroutineCtx*>(1);
-    pMsg = pCorutine->GetResumeParam<ctx_message*>(2);
-    return true;
-}
-
-//! 获取参数个数和参数,只能在resume之后调用
-void** GetCoroutineCtxParamInfo(CCorutinePlus* pCorutine, int& nCount){
-    nCount = pCorutine->GetResumeParam<int>(1);
-    return pCorutine->GetResumeParamPoint<void**>(2)[0];
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //! 加入timer
@@ -297,16 +271,52 @@ void CCoroutineCtxOnTimerWakeup(Net_PtrInt nKey, Net_PtrInt pParam1){
 bool OnTimerToWakeUpCorutine(uint32_t nCtxID, int nTimes, CCorutinePlus* pCorutine){
     bool bRet = CCtx_ThreadPool::GetThreadPool()->GetOnTimerModule().AddTimeOut((Net_PtrInt)pCorutine, CCoroutineCtxOnTimerWakeup, nTimes, nCtxID);
     if (bRet){
-        CCoroutineCtx* pCurrentCtx = nullptr;
-        ctx_message* pCurrentMsg = nullptr;
-        if (!YieldCorutineToCtx(pCorutine, 0, pCurrentCtx, pCurrentMsg)){
-            ASSERT(0);
-            bRet = false;
-        }
+		MACRO_YieldToCtx(pCorutine, 0,
+            ASSERT(0);bRet = false;)
     }
 	else{
 		ASSERT(0);
 		bRet = false;
 	}
     return bRet;
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+CCorutinePlus::CCorutinePlus(){
+	m_pCurrentCtx = nullptr;
+}
+
+CCorutinePlus::~CCorutinePlus(){
+
+}
+
+//! 初始化
+void CCorutinePlus::ReInit(coroutine_funcframe pFunc){
+	CCorutinePlusBase::Create((coroutine_func)pFunc);
+	m_pCurrentCtx = nullptr;
+}
+////////////////////////////////////////////////////////////////////////////////
+CCorutinePlusPool::CCorutinePlusPool(){
+
+}
+CCorutinePlusPool::~CCorutinePlusPool(){
+
+}
+void CCorutinePlusPool::FinishFunc(CCorutinePlusBase* pCorutine){
+	CCorutinePlus* pPlus = (CCorutinePlus*)pCorutine;
+	if(pPlus->m_vtStoreCtx.size() > 0){
+		for(auto& ctx : pPlus->m_vtStoreCtx){
+			//需要释放到队列中
+			ctx->PushGlobalQueue();
+		}
+		pPlus->m_vtStoreCtx.clear();
+	}
+}
+////////////////////////////////////////////////////////////////////////////////
+CCorutinePlusThreadData::CCorutinePlusThreadData(){
+
+}
+
+CCorutinePlusThreadData::~CCorutinePlusThreadData(){
+
 }

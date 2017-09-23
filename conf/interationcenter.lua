@@ -28,6 +28,10 @@ server_serversessionctx="CInterationCenterServerSessionCtx"
 server_Address="0.0.0.0:6666"
 server_serverlistentimeout=45
 server_serverlisteniptrust="*"
+--Íø¹Ø
+server_gate="CCoroutineCtx_GateInteration"
+--ÒµÎñctx
+server_gate_serversessionctx="CInterationCenterServerSessionCtx"
 --
 requesttimeout=5
 

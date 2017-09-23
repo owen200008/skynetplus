@@ -50,15 +50,15 @@ public:
     //! 发送数据
     void SendRedisData(basiclib::CBasicSmartBuffer& smBuf);
 protected:
-    int32_t OnConnect(basiclib::CBasicSessionNetClient* pClient, uint32_t nCode);
-    int32_t OnReceiveVerify(basiclib::CBasicSessionNetClient* pNotify, Net_UInt dwNetCode, Net_Int cbData, const char* pszData);
-    int32_t OnReceiveVerifyDB(basiclib::CBasicSessionNetClient* pNotify, Net_UInt dwNetCode, Net_Int cbData, const char* pszData);
-    int32_t OnReceive(basiclib::CBasicSessionNetClient* pNotify, Net_UInt dwNetCode, Net_Int cbData, const char* pszData);
-    int32_t OnDisconnect(basiclib::CBasicSessionNetClient* pNotify, Net_UInt dwNetCode);
-    int32_t OnIdle(basiclib::CBasicSessionNetClient*, uint32_t);
+    int32_t OnConnect(basiclib::CBasicSessionNetNotify* pClient, uint32_t nCode);
+    int32_t OnReceiveVerify(basiclib::CBasicSessionNetNotify* pNotify, Net_UInt dwNetCode, Net_Int cbData, const char* pszData);
+    int32_t OnReceiveVerifyDB(basiclib::CBasicSessionNetNotify* pNotify, Net_UInt dwNetCode, Net_Int cbData, const char* pszData);
+    int32_t OnReceive(basiclib::CBasicSessionNetNotify* pNotify, Net_UInt dwNetCode, Net_Int cbData, const char* pszData);
+    int32_t OnDisconnect(basiclib::CBasicSessionNetNotify* pNotify, Net_UInt dwNetCode);
+    int32_t OnIdle(basiclib::CBasicSessionNetNotify*, uint32_t);
 protected:
-    bool CheckVerifyPwd(basiclib::CBasicSessionNetClient* pNotify, basiclib::CBasicSmartBuffer& smBuf);
-    bool CheckVerifyDB(basiclib::CBasicSessionNetClient* pNotify, basiclib::CBasicSmartBuffer& smBuf);
+    bool CheckVerifyPwd(basiclib::CBasicSessionNetNotify* pNotify, basiclib::CBasicSmartBuffer& smBuf);
+    bool CheckVerifyDB(basiclib::CBasicSessionNetNotify* pNotify, basiclib::CBasicSmartBuffer& smBuf);
 protected:
     //! 执行函数
     static void Func_ReceiveRedisReply(CCoroutineCtx* pCtx, ctx_message* pMsg);
@@ -93,7 +93,7 @@ public:
     virtual void ReleaseCtx();
 
     //! 协程里面调用Bussiness消息
-    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg);
+    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket);
 
     ////////////////////////////////////////////////////////////////////////////////////////
     //业务类, 全部使用静态函数, 这样可以保证动态库函数可以替换,做到动态更新
@@ -118,6 +118,7 @@ protected:
     //在work线程安全
     MsgQueueRequestStoreData    m_vtRequest;
     int                         m_nDefaultTimeoutRequest;
+	MsgQueueRequestStoreData	m_vtWaitRequest;
 };
 
 struct RedisWatchStore{
@@ -143,7 +144,7 @@ public:
     virtual void ReleaseCtx();
 
     //! 协程里面调用Bussiness消息
-    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket, ctx_message* pCurrentMsg);
+    virtual int DispathBussinessMsg(CCorutinePlus* pCorutine, uint32_t nType, int nParam, void** pParam, void* pRetPacket);
 
     ////////////////////////////////////////////////////////////////////////////////////////
     //业务类, 全部使用静态函数, 这样可以保证动态库函数可以替换,做到动态更新
@@ -175,10 +176,13 @@ protected:
     typedef basiclib::basic_map<basiclib::CBasicString, RedisWatchStore> MapRequest;
     MapRequest                  m_mapSub;
     MapRequest                  m_mapPSub;
+	MsgQueueRequestStoreData	m_vtWaitRequest;
+	int                         m_nDefaultTimeoutRequest;
 };
 
 //实现全局安全的函数封装使用redis（不是watch）
 _SKYNET_KERNEL_DLL_API bool CCFrameRedisRequest(uint32_t nResCtxID, uint32_t nRedisCtxID, CCorutinePlus* pCorutine, CRedisSendPacket& request, CRedisReplyPacket& replyPacket);
+
 
 #pragma warning (pop)
 
