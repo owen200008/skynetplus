@@ -46,6 +46,8 @@ int main(int argc, char* argv[])
 		getchar();
 		return 1;
 	}
+	basiclib::BasicSetExceptionMode();
+
 	basiclib::CBasicLoadDll dllFile;
 	if (dllFile.LoadLibrary("kernel.dll") == 0) {
 		FuncStartKernel pFunc = (FuncStartKernel)dllFile.GetProcAddress("StartKernel");
