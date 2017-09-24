@@ -128,6 +128,7 @@ CCorutinePlusThreadData* CCtx_ThreadPool::GetOrCreateSelfThreadData(){
 	}
 	CCorutinePlusThreadData* pRetData = new CCorutinePlusThreadData();
 	g_pCtxThreadPool->m_tls.SetValue(pRetData);
+	pRetData->Init();
 	return pRetData;
 }
 //////////////////////////////////////////////////////////////////////////////////////////////

@@ -141,7 +141,7 @@ public:
 	void WaitForGlobalMQ(unsigned int nTimeout);
 protected:
 	basiclib::CEvent*		m_pEvent;
-	std::atomic<bool>		m_bWaitThread;
+	std::atomic<uint16_t>	m_nWaitThread;
 };
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

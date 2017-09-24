@@ -311,6 +311,7 @@ void CCorutinePlusPool::FinishFunc(CCorutinePlusBase* pCorutine){
 		}
 		pPlus->m_vtStoreCtx.clear();
 	}
+	CCorutinePlusPoolBase::FinishFunc(pCorutine);
 }
 ////////////////////////////////////////////////////////////////////////////////
 CCorutinePlusThreadData::CCorutinePlusThreadData(){

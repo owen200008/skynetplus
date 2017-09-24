@@ -61,42 +61,36 @@ void CCtxMessageQueue::PushToMQMgr()
 	}
 }
 ////////////////////////////////////////////////////////////////////////////////////////////
-CMQMgr::CMQMgr() : m_bWaitThread(true)
-{
-	m_pEvent = new basiclib::CEvent(FALSE, TRUE);
+CMQMgr::CMQMgr() : m_nWaitThread(0){
+	m_pEvent = new basiclib::CEvent();
 }
 
-CMQMgr::~CMQMgr()
-{
+CMQMgr::~CMQMgr(){
 	if (m_pEvent){
 		delete m_pEvent;
 		m_pEvent = nullptr;
 	}
 }
 
-void CMQMgr::GlobalMQPush(CCtxMessageQueue* queue)
-{
+void CMQMgr::GlobalMQPush(CCtxMessageQueue* queue){
 	moodycamel::ProducerToken token(*this);
 	GlobalMQPush(token, queue);
 }
-void CMQMgr::GlobalMQPush(moodycamel::ProducerToken& token, CCtxMessageQueue* queue)
-{
+void CMQMgr::GlobalMQPush(moodycamel::ProducerToken& token, CCtxMessageQueue* queue){
 	bool bRet = enqueue(token, queue);
 	if (bRet){
-		if (m_bWaitThread.exchange(false)){
+		if(m_nWaitThread.load(std::memory_order_relaxed) != 0)
 			m_pEvent->SetEvent();
-		}
 	}
 }
 
-void CMQMgr::WaitForGlobalMQ(unsigned int nTimeout)
-{
-	m_bWaitThread.store(true);
+void CMQMgr::WaitForGlobalMQ(unsigned int nTimeout){
+	m_nWaitThread.fetch_add(1, std::memory_order_relaxed);
 	basiclib::BasicWaitForSingleObject(*m_pEvent, nTimeout);
+	m_nWaitThread.fetch_sub(1, std::memory_order_relaxed);
 }
 
-CCtxMessageQueue* CMQMgr::GlobalMQPop(moodycamel::ConsumerToken& token)
-{
+CCtxMessageQueue* CMQMgr::GlobalMQPop(moodycamel::ConsumerToken& token){
 	CCtxMessageQueue* pRet = nullptr;
 	try_dequeue(token, pRet);
 	return pRet;
