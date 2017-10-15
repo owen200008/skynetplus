@@ -138,7 +138,7 @@ public:
 	CCtxMessageQueue* GlobalMQPop(moodycamel::ConsumerToken& token);
 
 	//wait timeout ms
-	void WaitForGlobalMQ(unsigned int nTimeout);
+	void WaitForGlobalMQ();
 protected:
 	basiclib::CEvent*		m_pEvent;
 	std::atomic<uint16_t>	m_nWaitThread;

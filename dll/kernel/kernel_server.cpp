@@ -168,6 +168,7 @@ bool CKernelServer::ReadConfig(){
 	return true;
 }
 
+extern DWORD g_TiaoShiFlag;
 void CKernelServer::KernelServerStart(const char* pConfigFileName){
     //日志由框架日志ctx管理
     basiclib::InitBasicLog(false);
@@ -252,6 +253,16 @@ void CKernelServer::KernelServerStart(const char* pConfigFileName){
 				});
 				Http_Json_Number_Set(doc, Http_Json_KeyDefine_RetNum, Http_Json_KeyDefine_RetNum_Success);
 				Http_Json_String_Set(doc, Http_Json_KeyDefine_String, strRet.c_str());
+				return HTTP_SUCC;
+			}, nullptr, nullptr);
+			CCFrameHttpRegister(0, pRealCtx->m_pCtxThreadPool->GetDefaultHttp(), pCorutine, "tiaoshimode", [](CCoroutineCtx_Http* pHttpCtx, RefHttpSession pSession, SCBasicDocument& doc, HttpRequest* pRequest, HttpResponse& response, CCorutinePlus* pCorutine, void* pUD)->long{
+				char szBuf[256] = { 0 };
+				const char* pTiaoshi = pRequest->GetParamValue("tiaoshi");
+				if(pTiaoshi){
+					g_TiaoShiFlag = strtol(pTiaoshi, 0, 16);
+					CCFrameSCBasicLogEventV("Load TiaoShi %s %x", pTiaoshi, g_TiaoShiFlag);
+				}
+				Http_Json_Number_Set(doc, Http_Json_KeyDefine_RetNum, Http_Json_KeyDefine_RetNum_Success);
 				return HTTP_SUCC;
 			}, nullptr, nullptr);
 		}, this);

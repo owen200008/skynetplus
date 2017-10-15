@@ -252,7 +252,7 @@ int CCtx_TiaoZhanPaiMing::DispathBussinessMsg_GetMoreThanSelf(CCorutinePlus* pCo
 		}
 	}
 	Net_UShort nMingCiEnd = nMingCiBegin + m_nTiaoZhanMingCiNum * 1.2;
-	if(nMingCiEnd > m_nPaiMingCount)
+	if(nMingCiEnd >= m_nPaiMingCount)
 		nMingCiEnd = m_nPaiMingCount - 1;
 	//先加入前三名
 	int nAddNumber = 0;

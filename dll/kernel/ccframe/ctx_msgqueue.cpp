@@ -83,10 +83,10 @@ void CMQMgr::GlobalMQPush(moodycamel::ProducerToken& token, CCtxMessageQueue* qu
 			m_pEvent->SetEvent();
 	}
 }
-
-void CMQMgr::WaitForGlobalMQ(unsigned int nTimeout){
+extern DWORD g_TiaoShiFlag;
+void CMQMgr::WaitForGlobalMQ(){
 	m_nWaitThread.fetch_add(1, std::memory_order_relaxed);
-	basiclib::BasicWaitForSingleObject(*m_pEvent, nTimeout);
+	basiclib::BasicWaitForSingleObject(*m_pEvent, 1000);
 	m_nWaitThread.fetch_sub(1, std::memory_order_relaxed);
 }
 

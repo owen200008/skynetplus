@@ -12,6 +12,8 @@
 #include "paiming/ctx_tiaozhanpaiming.h"
 #include "paiming/ctx_tiaozhanpaiming_record.h"
 
+DWORD g_TiaoShiFlag = 0;
+
 CCtxMessageQueue* DispathCtxMsg(CMQMgr* pMgrQueue, moodycamel::ConsumerToken& token, CCtxMessageQueue* pQ, uint32_t& usPacketNumber, CCorutinePlusThreadData* pCurrentData){
     if (pQ == NULL) {
         pQ = pMgrQueue->GlobalMQPop(token);
@@ -27,9 +29,9 @@ CCtxMessageQueue* DispathCtxMsg(CMQMgr* pMgrQueue, moodycamel::ConsumerToken& to
     }
     if (pCtx->IsReleaseCtx()){
         //清空队列
-        moodycamel::ConsumerToken token(*pQ);
+        moodycamel::ConsumerToken tokenpQ(*pQ);
         ctx_message msg;
-        while (pQ->MQPop(token, msg)){
+        while (pQ->MQPop(tokenpQ, msg)){
             //如果是协程需要归还
             if (msg.m_nType == CTXMESSAGE_TYPE_RUNCOROUTINE){
 				pCurrentData->GetCorutinePlusPool()->ReleaseCorutine((CCorutinePlus*)msg.m_pFunc);
@@ -90,7 +92,7 @@ void ExecThreadOnWork(CCtx_ThreadPool* pThreadPool)
 		if (pQ == nullptr) {
             pThreadQ = DispathCtxMsg(pThreadMQ, threadCToken, pThreadQ, usPacketNumber, pCurrentData);
 			if (pThreadQ == nullptr)
-				pMgrQueue->WaitForGlobalMQ(1000);
+				pMgrQueue->WaitForGlobalMQ();
 		}
 	}
 	CCFrameSCBasicLogEventV("退出ExecThreadOnWork %d ThreadID(%d)", basiclib::BasicGetCurrentThreadId(), pCurrentData->GetThreadID());
