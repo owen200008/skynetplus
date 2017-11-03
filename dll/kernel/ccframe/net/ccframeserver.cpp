@@ -1,6 +1,8 @@
 #include "ccframeserver.h"
 #include "../coroutinedata/coroutinestackdata.h"
 
+std::function<void(CCFrameServerSession* pSession)>	CCFrameServerSession::g_notifyOnTime30NoCtxID;
+
 //提供Debug receive接口
 void CCFrameServer::DebugReceiveData(CCFrameServerSession* pSession, Net_Int cbData, const char* pszData){
     if (m_funcReceive)
@@ -33,6 +35,18 @@ BOOL CCFrameServerSession::IsTooBusy(int nUseTime){
 		m_dwLastTick = dwNow;
 	}
 	return FALSE;
+}
+//定时器,ontimer线程
+void CCFrameServerSession::OnTimer(unsigned int nTick){
+	CNetServerControlSession::OnTimer(nTick);
+	m_dwNoCtxIDTime++;
+
+	if(m_dwNoCtxIDTime > 30){
+		m_dwNoCtxIDTime = 0;
+		//30s还没初始化的话需要通知上层
+		if(g_notifyOnTime30NoCtxID != nullptr)
+			g_notifyOnTime30NoCtxID(this);
+	}
 }
 //////////////////////////////////////////////////////////////////////////////////////////////
 int32_t CMoniFrameServerSession::Send(void *pData, int32_t cbData, uint32_t dwFlag){

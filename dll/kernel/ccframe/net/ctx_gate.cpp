@@ -8,6 +8,7 @@ CreateTemplateSrc(CCoroutineCtx_CCFrameServerGate)
 CCoroutineCtx_CCFrameServerGate::CCoroutineCtx_CCFrameServerGate(const char* pKeyName, const char* pClassName) : CCoroutineCtx(pKeyName, pClassName) {
 	m_pServerSessionCtx = nullptr;
 	m_nDelayDeleteTime = 0;
+	m_nTickOnTimer = 0;
 }
 
 CCoroutineCtx_CCFrameServerGate::~CCoroutineCtx_CCFrameServerGate() {
@@ -24,10 +25,8 @@ int CCoroutineCtx_CCFrameServerGate::InitCtx(CMQMgr* pMQMgr, const std::function
 	IsErrorHapper(strlen(m_pServerSessionCtx) != 0, CCFrameSCBasicLogEventErrorV("ServerListen createserversessionctx %s 0", szBuf); return -1);
 	sprintf(szBuf, "%s_delaydeletectxtime", m_pCtxName);
 	m_nDelayDeleteTime = atol(func(InitGetParamType_Config, szBuf, "0"));
-	if (m_nDelayDeleteTime > 0 && m_nDelayDeleteTime != 0xFFFFFFFF) {
-		//10s检查一次
-		CoroutineCtxAddOnTimer(m_ctxID, m_nDelayDeleteTime * 10, OnTimer);
-	}
+	//10s检查一次
+	CoroutineCtxAddOnTimer(m_ctxID, 1000, OnTimer);
 	return 0;
 }
 
@@ -37,12 +36,11 @@ void CCoroutineCtx_CCFrameServerGate::ReleaseCtx() {
 	CCoroutineCtx::ReleaseCtx();
 }
 
-
 void CCoroutineCtx_CCFrameServerGate::OnTimer(CCoroutineCtx* pCtx) {
 	CCoroutineCtx_CCFrameServerGate* pRedisCtx = (CCoroutineCtx_CCFrameServerGate*)pCtx;
 	time_t tmNow = time(NULL);
 	VTDelayRelease& checkData = pRedisCtx->m_vtQueue;
-	MapUniqueKeyToCtxID& mapData  =pRedisCtx->m_mapKeyToCtxID;
+	MapUniqueKeyToCtxID& mapData = pRedisCtx->m_mapKeyToCtxID;
 	while (checkData.size() > 0) {
 		auto& iterCheck = checkData.begin();
 		auto& iter = mapData.find(*iterCheck);
@@ -57,6 +55,7 @@ void CCoroutineCtx_CCFrameServerGate::OnTimer(CCoroutineCtx* pCtx) {
 		}
 		checkData.erase(iterCheck);
 	}
+	pRedisCtx->OnTimerChild(pRedisCtx->m_nTickOnTimer++);
 }
 
 //! 协程里面调用Bussiness消息
@@ -79,9 +78,9 @@ int CCoroutineCtx_CCFrameServerGate::DispathBussinessMsg(CCorutinePlus* pCorutin
 
 bool CCoroutineCtx_CCFrameServerGate::Create(CCorutinePlus* pCorutine, CCFrameServerSession* pSession, int64_t nUniqueKey, const std::function<void()>& funcBeforeInit) {
 	auto& iter = m_mapKeyToCtxID.find(nUniqueKey);
-	uint32_t m_nSessionCtxID = 0;
+	uint32_t nSessionCtxID = 0;
 	if (iter == m_mapKeyToCtxID.end()) {
-		m_nSessionCtxID = CCtx_ThreadPool::GetThreadPool()->CreateTemplateObjectCtx(m_pServerSessionCtx, nullptr, [&](InitGetParamType type, const char* pKey, const char* pDefault)->const char* {
+		nSessionCtxID = CCtx_ThreadPool::GetThreadPool()->CreateTemplateObjectCtx(m_pServerSessionCtx, nullptr, [&](InitGetParamType type, const char* pKey, const char* pDefault)->const char* {
 			switch (type) {
 			case InitGetParamType_Config:
 				return CCtx_ThreadPool::GetThreadPool()->m_defaultFuncGetConfig(type, pKey, pDefault);
@@ -96,18 +95,18 @@ bool CCoroutineCtx_CCFrameServerGate::Create(CCorutinePlus* pCorutine, CCFrameSe
 			}
 			return pDefault;
 		});
-		if (m_nSessionCtxID == 0) {
+		if (nSessionCtxID == 0) {
 			CCFrameSCBasicLogEvent("VerifySuccessCallback but createctx fail");
 			return false;
 		}
 	}
 	else {
-		m_nSessionCtxID = iter->second.m_nCtxID;
+		nSessionCtxID = iter->second.m_nCtxID;
 	}
-	pSession->BindCtxID(m_nSessionCtxID, nUniqueKey);
-	m_mapKeyToCtxID[nUniqueKey].Create(m_nSessionCtxID, pSession);
+	pSession->BindCtxID(nSessionCtxID, nUniqueKey);
+	m_mapKeyToCtxID[nUniqueKey].Create(nSessionCtxID, pSession);
 	funcBeforeInit();
-	MACRO_ExeToCtxParam2(pCorutine, m_ctxID, m_nSessionCtxID, CCoroutineCtx_CCFrameServerSession_Init, pSession, &nUniqueKey, nullptr,
+	MACRO_ExeToCtxParam2(pCorutine, m_ctxID, nSessionCtxID, CCoroutineCtx_CCFrameServerSession_Init, pSession, &nUniqueKey, nullptr,
 						 return false);
 	return true;
 }

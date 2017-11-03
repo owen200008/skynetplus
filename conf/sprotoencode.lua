@@ -1,3 +1,3 @@
 --parse protocal file
-sprotofilename="E:/project/kusound_stable/server/../../../github/skynetplus/dll/skynetplusprotocal/skynetplusprotocal.h&E:/project/kusound_stable/server/../../scbasic/protocal/xkprotocal.h&E:/project/kusound_stable/server/../sprotoprotocal/kusoundprotocal.h"
+sprotofilename="E:/project/xmqxz/serverplus/../../../github/skynetplus/dll/skynetplusprotocal/skynetplusprotocal.h&E:/project/xmqxz/serverplus/../../scbasic/protocal/xkprotocal.h&E:/project/xmqxz/serverplus/../sprotoprotocal/xmqxzprotocal.h"
 sprotostoreluafile="lua/skynetplus.protocal"

@@ -38,12 +38,21 @@ public:
 	BOOL IsTooBusy(int nUseTime = 10000);
 
     MapContain& GetServerSessionMapRevert(){ return m_mapRevert; }
+
+	//定时器,ontimer线程
+	virtual void OnTimer(unsigned int nTick);
+
+	//30s内发现没有初始化成功ctxid的话回调函数
+	static void BindOnTimer30NoCtxIDCallback(const std::function<void(CCFrameServerSession* pSession)>& func){
+		g_notifyOnTime30NoCtxID = func;
+	}
 protected:
 	CCFrameServerSession(){
 		m_ctxID = 0;
 		m_nUniqueKey = 0;
 		m_dwLastTick = 0;
 		m_dwReceiveTimes = 0;
+		m_dwNoCtxIDTime = 0;
 	}
 	virtual ~CCFrameServerSession(){
 		ASSERT(m_ctxID == 0);
@@ -53,8 +62,10 @@ protected:
 	int64_t			m_nUniqueKey;
 	DWORD           m_dwLastTick;
 	DWORD           m_dwReceiveTimes;
+	DWORD			m_dwNoCtxIDTime;
 
     MapContain      m_mapRevert;
+	static std::function<void(CCFrameServerSession* pSession)>	g_notifyOnTime30NoCtxID;
 };
 typedef basiclib::CBasicRefPtr<CCFrameServerSession> RefCCFrameServerSession;
 

@@ -52,6 +52,7 @@ public:
 	////////////////////////////////////////////////////////////////////////////////////////
 	//业务类, 全部使用静态函数, 这样可以保证动态库函数可以替换,做到动态更新
 	static void OnTimer(CCoroutineCtx* pCtx);
+	virtual void OnTimerChild(unsigned int nTick){}
 public:
 	virtual int32_t OnReceive(basiclib::CBasicSessionNetNotify* pNotify, Net_UInt dwNetCode, Net_Int cbData, const char* pszData);
 	virtual int32_t OnDisconnect(basiclib::CBasicSessionNetNotify* pNotify, Net_UInt dwNetCode);
@@ -76,6 +77,8 @@ protected:
 	//延迟删除的队列
 	typedef basiclib::basic_vector<int64_t>	VTDelayRelease;
 	VTDelayRelease				m_vtQueue;
+
+	unsigned int				m_nTickOnTimer;
 };
 
 #pragma warning (pop)
