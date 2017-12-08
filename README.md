@@ -11,7 +11,6 @@ but now it is diffcult to code (like scripting language), compile check is no us
 
 ## compile
 ```
-use cmake to compile
-simple:
-mkdir build && cd build
-cmake ..
+It support cmake compile. default use release
+mkdir build &&  cd build
+cmake .. -DCMAKE_BUILD_TYPE=Debug

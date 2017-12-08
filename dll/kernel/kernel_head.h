@@ -1,7 +1,7 @@
 #ifndef SKYNETKERNEL_HEAD_H
 #define SKYNETKERNEL_HEAD_H
 
-#ifdef __BASICWINDOWS
+#ifdef _MSC_VER
 #ifdef kernel_EXPORTS
 #define _SKYNET_KERNEL_DLL_API 	__declspec(dllexport)
 #else

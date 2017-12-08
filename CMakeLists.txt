@@ -6,17 +6,15 @@ endif()
 
 project(skynetplusexe)
 
-#目前默认先不用3rd目录下的
-#set(SkynetPlusBasicLibPath ${PROJECT_SOURCE_DIR}/3rd/ccbasic CACHE STRING "BasiclibPath")
 set(SkynetPlusBasicLibPath ${PROJECT_SOURCE_DIR}/../ccbasic CACHE STRING "BasiclibPath")
 set(BasicLibPath ${SkynetPlusBasicLibPath} CACHE PATH "BasicLibPath" FORCE)
 
 if(SkynetPlusOutputPath)
-SET(EXECUTABLE_OUTPUT_PATH ${SkynetPlusOutputPath})
-SET(LIBRARY_OUTPUT_PATH ${SkynetPlusOutputPath})
+	SET(EXECUTABLE_OUTPUT_PATH ${SkynetPlusOutputPath})
+	SET(LIBRARY_OUTPUT_PATH ${SkynetPlusOutputPath})
 else()
-SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
-SET(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
+	SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
+	SET(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 endif()
 
 #create default config
@@ -32,7 +30,6 @@ add_subdirectory(${PROJECT_SOURCE_DIR}/dll/kernel ${PROJECT_BINARY_DIR}/kernel)
 add_subdirectory(${PROJECT_SOURCE_DIR}/dll/interationcenter ${PROJECT_BINARY_DIR}/interationcenter)
 
 include_directories(${SkynetPlusBasicLibPath}/src/inc)
-include_directories(${SkynetPlusBasicLibPath}/3rd/libevent/include)
 
 #flag
 set(RunProjectCXX_FLAGS ${CMAKE_CXX_FLAGS})
@@ -41,10 +38,9 @@ set(RunProjectC_FLAGS ${CMAKE_C_FLAGS})
 set(RunProjectLinks_SkynetPlus)
 
 if(MSVC)
-	include_directories(${SkynetPlusBasicLibPath}/3rd/libevent/build/include)
 	set(RunProjectCXX_FLAGS "${RunProjectCXX_FLAGS} /MP")
 	set(RunProjectC_FLAGS "${RunProjectC_FLAGS} /MP")
-	add_definitions(-DUNICODE -D_UNICODE -D__BASICWINDOWS)
+	add_definitions(-DUNICODE -D_UNICODE -DBASIC_DLL_IMPORTS)
 else()
 	set(RunProjectCXX_FLAGS "${RunProjectCXX_FLAGS} --std=c++11")
 	add_definitions(-DLINUX -D__LINUX)
@@ -54,7 +50,7 @@ endif()
 set(CMAKE_CXX_FLAGS ${RunProjectCXX_FLAGS})
 set(CMAKE_C_FLAGS ${RunProjectC_FLAGS})
 #link
-set(RunProjectLinks_SkynetPlus ${RunProjectLinks_SkynetPlus} basicdll)
+set(RunProjectLinks_SkynetPlus ${RunProjectLinks_SkynetPlus} basiclib)
 
 
 set(RunProject_SOURCES

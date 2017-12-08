@@ -7,23 +7,9 @@ endif()
 project(kerneldll)
 
 #build basiclib
-set(BASICLIB_BUILD_STATIC OFF CACHE BOOL "flags")
+set(BASICLIB_BUILD_SHARED ON CACHE BOOL "flags")
+set(BASICLIB_BUILD_LUA ON CACHE BOOL "flags")
 add_subdirectory(${BasicLibPath}/src ${PROJECT_BINARY_DIR}/BasicLib)
-#build cryptopp
-set(BUILD_TESTING OFF CACHE BOOL "flags")
-set(BUILD_SHARED OFF CACHE BOOL "flags")
-set(USE_INTERMEDIATE_OBJECTS_TARGET OFF CACHE BOOL "flags")
-add_subdirectory(${BasicLibPath}/3rd/cryptopp ${PROJECT_BINARY_DIR}/Cryptopp)
-#build sproto
-add_subdirectory(${BasicLibPath}/src/scbasic/sproto ${PROJECT_BINARY_DIR}/Sproto)
-
-include_directories(${BasicLibPath}/src/inc)
-include_directories(${BasicLibPath}/3rd/libevent/include)
-include_directories(${BasicLibPath}/3rd/lua/src)
-include_directories(${BasicLibPath}/3rd/cryptopp)
-include_directories(${BasicLibPath}/3rd/rapidjson/include)
-#include_directories(${BasicLibPath}/3rd/Selene/include)
-include_directories(${BasicLibPath}/3rd/kaguya/include)
 
 #flag
 set(RunProjectCXX_FLAGS ${CMAKE_CXX_FLAGS})
@@ -32,26 +18,21 @@ set(RunProjectC_FLAGS ${CMAKE_C_FLAGS})
 set(RunProjectLinks)
 
 if(MSVC)
-	include_directories(${BasicLibPath}/3rd/libevent/build/include)
 	set(RunProjectCXX_FLAGS "${RunProjectCXX_FLAGS} /MP")
 	set(RunProjectC_FLAGS "${RunProjectC_FLAGS} /MP")
-	add_definitions(-DUNICODE -D_UNICODE -D__BASICWINDOWS -DBASIC_DLL_IMPORTS  -DKAGUYA_SUPPORT_MULTIPLE_SHARED_LIBRARY)
-	set(RunProjectLinks ${RunProjectLinks} ${BasicLibPath}/libs/FLzlib13.lib 
-		${BasicLibPath}/3rd/libevent/build/lib/Debug/event.lib
-		${BasicLibPath}/libs/lua53.lib)
+	add_definitions(-DUNICODE -D_UNICODE -DBASIC_DLL_IMPORTS -DKAGUYA_SUPPORT_MULTIPLE_SHARED_LIBRARY)
+	set(RunProjectLinks ${RunProjectLinks})
 else()
 	set(RunProjectCXX_FLAGS "${RunProjectCXX_FLAGS} --std=c++11")
-	add_definitions(-DLINUX -D__LINUX -DBASIC_DLL_IMPORTS  -DKAGUYA_SUPPORT_MULTIPLE_SHARED_LIBRARY)
-	set(RunProjectLinks ${BasicLibPath}/libs/liblua.a
-		${BasicLibPath}/3rd/libevent/.libs/libevent.a
-		)
+	add_definitions(-DLINUX -D__LINUX  -DKAGUYA_SUPPORT_MULTIPLE_SHARED_LIBRARY)
+	set(RunProjectLinks ${RunProjectLinks})
 endif()
 
 #flag
 set(CMAKE_CXX_FLAGS ${RunProjectCXX_FLAGS})
 set(CMAKE_C_FLAGS ${RunProjectC_FLAGS})
 #link
-set(RunProjectLinks ${RunProjectLinks} basicdll cryptopp-static sproto)
+set(RunProjectLinks ${RunProjectLinks} basiclib cryptopp-static sproto)
 
 set(RunProject_SOURCES
     ${BasicLibPath}/src/scbasic/commu/basicclient.h
@@ -147,10 +128,6 @@ target_link_libraries(kernel ${RunProjectLinks})
 if(MSVC)
 	add_custom_command(TARGET kernel POST_BUILD COMMAND if not exist "\"$(OutDir)conf\"" mkdir "\"$(OutDir)conf\"")
 	add_custom_command(TARGET kernel POST_BUILD COMMAND if not exist "\"$(OutDir)lua\"" mkdir "\"$(OutDir)lua\"")
-	add_custom_command(TARGET kernel POST_BUILD COMMAND xcopy /Y /Q "\"${BasicLibPath}\\libs\\FLzlib13.dll\"" "\"$(OutDir)\"")
-	add_custom_command(TARGET kernel POST_BUILD COMMAND xcopy /Y /Q "\"${BasicLibPath}\\3rd\\libevent\\build\\bin\\Debug\\event.dll\"" "\"$(OutDir)\"")
-	add_custom_command(TARGET kernel POST_BUILD COMMAND xcopy /Y /Q "\"${BasicLibPath}\\libs\\lua53.dll\"" "\"$(OutDir)\"")
-	add_custom_command(TARGET kernel POST_BUILD COMMAND xcopy /Y /Q "\"${BasicLibPath}\\libs\\lpeg.dll\"" "\"$(OutDir)\"")
 	add_custom_command(TARGET kernel POST_BUILD COMMAND xcopy /Y /Q "\"${BasicLibPath}\\src\\scbasic\\sproto\\*.lua\"" "\"$(OutDir)lua\"" )
 	add_custom_command(TARGET kernel POST_BUILD COMMAND xcopy /Y /Q "\"${PROJECT_SOURCE_DIR}\\lua\\*.lua\"" "\"$(OutDir)lua\"" )
 endif()

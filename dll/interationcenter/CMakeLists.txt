@@ -6,11 +6,6 @@ endif()
 
 project(interationcenterdll)
 
-include_directories(${BasicLibPath}/src/inc)
-include_directories(${BasicLibPath}/3rd/libevent/include)
-include_directories(${BasicLibPath}/3rd/lua/src)
-include_directories(${BasicLibPath}/3rd/cryptopp)
-include_directories(${BasicLibPath}/3rd/rapidjson/include)
 include_directories(${PROJECT_SOURCE_DIR}/../..)
 
 #flag
@@ -23,17 +18,17 @@ if(MSVC)
 	include_directories(${BasicLibPath}/3rd/libevent/build/include)
 	set(RunProjectCXX_FLAGS "${RunProjectCXX_FLAGS} /MP")
 	set(RunProjectC_FLAGS "${RunProjectC_FLAGS} /MP")
-	add_definitions(-DUNICODE -D_UNICODE -D__BASICWINDOWS -DBASIC_DLL_IMPORTS  -DKAGUYA_SUPPORT_MULTIPLE_SHARED_LIBRARY)
+	add_definitions(-DUNICODE -D_UNICODE -DBASIC_DLL_IMPORTS  -DKAGUYA_SUPPORT_MULTIPLE_SHARED_LIBRARY)
 else()
 	set(RunProjectCXX_FLAGS "${RunProjectCXX_FLAGS} --std=c++11")
-	add_definitions(-DLINUX -D__LINUX -DBASIC_DLL_IMPORTS  -DKAGUYA_SUPPORT_MULTIPLE_SHARED_LIBRARY)
+	add_definitions(-DLINUX -D__LINUX -DKAGUYA_SUPPORT_MULTIPLE_SHARED_LIBRARY)
 endif()
 
 #flag
 set(CMAKE_CXX_FLAGS ${RunProjectCXX_FLAGS})
 set(CMAKE_C_FLAGS ${RunProjectC_FLAGS})
 #link
-set(RunProjectLinks ${RunProjectLinks} basicdll cryptopp-static kernel)
+set(RunProjectLinks ${RunProjectLinks} basiclib cryptopp-static kernel)
 
 set(RunProject_SOURCES
     ${PROJECT_SOURCE_DIR}/../skynetplusprotocal/skynetplusprotocal.h
