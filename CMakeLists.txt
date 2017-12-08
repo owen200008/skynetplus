@@ -44,6 +44,7 @@ if(MSVC)
 else()
 	set(RunProjectCXX_FLAGS "${RunProjectCXX_FLAGS} --std=c++11")
 	add_definitions(-DLINUX -D__LINUX)
+	set(RunProjectLinks_SkynetPlus ${RunProjectLinks_SkynetPlus} dl zlib)
 endif()
 
 #flag
