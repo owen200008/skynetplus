@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <basic.h>
-
+/*
 void TestShowImportDll(){
 	HMODULE hFromModule = GetModuleHandle(0);
 	PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)hFromModule;
@@ -37,7 +37,7 @@ void TestShowImportDll(){
 		pImportDesc++;  // Advance to next imported module descriptor
 	}
 }
-
+*/
 typedef void (*FuncStartKernel)(const char* pConfig);
 int main(int argc, char* argv[])
 {

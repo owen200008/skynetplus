@@ -44,7 +44,7 @@ struct _SKYNET_KERNEL_DLL_API ctx_message
 		memset(this, 0, sizeof(ctx_message));
 		m_nType = CTXMESSAGE_TYPE_RUNFUNC;
 		m_nSourceCtxID = nCtxID;
-		m_pFunc = pFunc;
+		m_pFunc = (void*)pFunc;
 		m_session = nSession;
 	}
 	//! Ö´ÐÐÐ­³Ì
@@ -90,7 +90,7 @@ struct _SKYNET_KERNEL_DLL_API ctx_message
 #pragma warning (disable: 4293)
 		func(szBuf, 
 			sprintf(szBuf, "C(%d) S(%x%x) T(%d) SZ(%d) F(%x%x) D(%x%x)", m_nSourceCtxID, 
-			(uint32_t)(m_session >> 32), (uint32_t)m_session, m_nType, sz, 
+			(uint32_t)(m_session >> 32), (uint32_t)m_session, m_nType, (int32_t)sz, 
 			(uint32_t)((intptr_t)m_pFunc >> 32), (uint32_t)m_pFunc, 
 			(uint32_t)((intptr_t)m_data >> 32), (uint32_t)m_data));
 #pragma warning (pop)
